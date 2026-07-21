@@ -1,11 +1,3 @@
---[[
-    MÃ NGUỒN: THIẾT KẾ MENU HÌNH TRÒN ĐỂ HIỂN THỊ ẢNH TOÀN DIỆN
-    HƯỚNG DẪN DÁN: Thay thế toàn bộ mã nguồn cũ trong 'LocalScript'.
-    SỬA ĐỔI CHÍNH: 
-    - Chuyển khung MainMenu thành hình tròn hoàn chỉnh (Kích thước 120x120px) giúp hiển thị trọn vẹn ảnh ID 99681486984720.
-    - Chuyển nút bấm chính và bộ đếm ngược vào trong cấu trúc hình tròn thẩm mỹ.
---]]
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
@@ -16,56 +8,46 @@ ScreenGui.Name = "TimeDilationGui"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Khung chứa Menu CHÍNH HÌNH TRÒN (ImageLabel)
-local MainMenu = Instance.new("ImageLabel")
-MainMenu.Name = "MainMenu"
-MainMenu.Size = UDim2.new(0, 120, 0, 120) -- Kích thước vuông để tạo hình tròn chuẩn
-MainMenu.Position = UDim2.new(0.05, 0, 0.4, 0)
-MainMenu.BackgroundTransparency = 1 
+-- NÚT BẤM DẠNG HÌNH TRÒN CHỨA ẢNH TRỰC TIẾP (ImageButton)
+local MainButton = Instance.new("ImageButton")
+MainButton.Name = "MainButton"
+MainButton.Size = UDim2.new(0, 110, 0, 110) -- Kích thước nút tròn
+MainButton.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainButton.BackgroundTransparency = 1 -- Ẩn nền vuông để hiện rõ ảnh tròn
 
--- Cấu hình hiển thị ảnh trong Menu tròn
-MainMenu.Image = "rbxassetid://99681486984720"
-MainMenu.ScaleType = Enum.ScaleType.Fit
+-- Gán ID ảnh trực tiếp vào nút
+MainButton.Image = "rbxassetid://99681486984720"
+MainButton.ScaleType = Enum.ScaleType.Fit
 
-MainMenu.Active = true
-MainMenu.Draggable = true 
-MainMenu.Parent = ScreenGui
+MainButton.Active = true
+MainButton.Draggable = true 
+MainButton.Parent = ScreenGui
 
--- Bo tròn khung Menu thành hình tròn tuyệt đối
-local MenuCorner = Instance.new("UICorner")
-MenuCorner.CornerRadius = UDim.new(1, 0)
-MenuCorner.Parent = MainMenu
+-- Nhãn hiển thị trạng thái chữ (BẬT / TẮT) nằm đè lên ảnh
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Size = UDim2.new(1, 0, 0.3, 0)
+StatusLabel.Position = UDim2.new(0, 0, 0.7, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = "BẬT"
+StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatusLabel.TextStrokeTransparency = 0 -- Tạo viền đen cho chữ dễ nhìn trên ảnh
+StatusLabel.TextSize = 16
+StatusLabel.Font = Enum.Font.SourceSansBold
+StatusLabel.ZIndex = 2
+StatusLabel.Parent = MainButton
 
--- Nút bấm Bật/Tắt dạng hình tròn phủ đè phía trên
-local ActionButton = Instance.new("TextButton")
-ActionButton.Name = "ActionButton"
-ActionButton.Size = UDim2.new(0, 100, 0, 32)
-ActionButton.Position = UDim2.new(0.5, -50, 0.7, -16)
-ActionButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-ActionButton.BackgroundTransparency = 0.2 -- Trong suốt nhẹ để lộ ảnh nền phía sau
-ActionButton.Text = "BẬT"
-ActionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ActionButton.TextSize = 13
-ActionButton.Font = Enum.Font.SourceSansBold
-ActionButton.BorderSizePixel = 0
-ActionButton.ZIndex = 2
-ActionButton.Parent = MainMenu
-
-local ButtonCorner = Instance.new("UICorner")
-ButtonCorner.CornerRadius = UDim.new(0, 8)
-ButtonCorner.Parent = ActionButton
-
--- Khung tròn đếm ngược hiển thị ngay chính giữa Menu
+-- Khung tròn đếm ngược (khi kích hoạt)
 local StatusCircle = Instance.new("Frame")
 StatusCircle.Name = "StatusCircle"
-StatusCircle.Size = UDim2.new(0, 45, 0, 45)
-StatusCircle.Position = UDim2.new(0.5, -22, 0.2, 0)
-StatusCircle.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-StatusCircle.BackgroundTransparency = 0.3
+StatusCircle.Size = UDim2.new(0, 40, 0, 40)
+StatusCircle.Position = UDim2.new(0.5, -20, 0.25, 0)
+StatusCircle.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+StatusCircle.BackgroundTransparency = 0.4
 StatusCircle.BorderSizePixel = 0
 StatusCircle.Visible = false
-StatusCircle.ZIndex = 2
-StatusCircle.Parent = MainMenu
+StatusCircle.ZIndex = 3
+StatusCircle.Parent = MainButton
 
 local CircleCorner = Instance.new("UICorner")
 CircleCorner.CornerRadius = UDim.new(1, 0)
@@ -75,10 +57,10 @@ local CountdownLabel = Instance.new("TextLabel")
 CountdownLabel.Size = UDim2.new(1, 0, 1, 0)
 CountdownLabel.BackgroundTransparency = 1
 CountdownLabel.Text = "5"
-CountdownLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-CountdownLabel.TextSize = 20
+CountdownLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+CountdownLabel.TextSize = 22
 CountdownLabel.Font = Enum.Font.SourceSansBold
-CountdownLabel.ZIndex = 3
+CountdownLabel.ZIndex = 4
 CountdownLabel.Parent = StatusCircle
 
 -------------------------------------------------------------------------
@@ -130,8 +112,8 @@ local function stopVisualFreeze()
     end
     
     StatusCircle.Visible = false
-    ActionButton.Text = "BẬT"
-    ActionButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+    StatusLabel.Text = "BẬT"
+    StatusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 end
 
 local function startVisualFreeze()
@@ -139,8 +121,8 @@ local function startVisualFreeze()
     isActive = true
     startTime = os.clock()
     
-    ActionButton.Text = "TẮT"
-    ActionButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+    StatusLabel.Text = "TẮT"
+    StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
     StatusCircle.Visible = true
     CountdownLabel.Text = tostring(FREEZE_DURATION)
     
@@ -180,7 +162,7 @@ local function startVisualFreeze()
     end)
 end
 
-ActionButton.MouseButton1Click:Connect(function()
+MainButton.MouseButton1Click:Connect(function()
     if isActive then
         stopVisualFreeze()
     else
