@@ -1,0 +1,187 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Khởi tạo ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TimeDilationGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Khung chứa Menu chính (Sử dụng ImageLabel)
+local MainMenu = Instance.new("ImageLabel")
+MainMenu.Name = "MainMenu"
+MainMenu.Size = UDim2.new(0, 180, 0, 80)
+MainMenu.Position = UDim2.new(0.05, 0, 0.4, 0)
+MainMenu.BackgroundTransparency = 1 -- Làm trong suốt nền để hiện rõ ảnh
+
+-- THUỘC TÍNH THÊM ẢNH VÀ ĐIỀU CHỈNH KÍCH THƯỚC:
+MainMenu.Image = "rbxassetid://99681486984720" -- Thuộc tính dán ID ảnh
+MainMenu.ScaleType = Enum.ScaleType.Fit        -- Tự động thu nhỏ vừa khít khung Menu
+
+MainMenu.Active = true
+MainMenu.Draggable = true 
+MainMenu.Parent = ScreenGui
+
+local MenuCorner = Instance.new("UICorner")
+MenuCorner.CornerRadius = UDim.new(0, 10)
+MenuCorner.Parent = MainMenu
+
+-- Tiêu đề Menu
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, 0, 0.4, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "HỆ THỐNG THỜI GIAN"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 14
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.ZIndex = 2
+TitleLabel.Parent = MainMenu
+
+-- Nút bấm Bật/Tắt
+local ActionButton = Instance.new("TextButton")
+ActionButton.Name = "ActionButton"
+ActionButton.Size = UDim2.new(0, 140, 0, 35)
+ActionButton.Position = UDim2.new(0.5, -70, 0.5, 0)
+ActionButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+ActionButton.Text = "BẬT ĐÔNG CỨNG"
+ActionButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ActionButton.TextSize = 14
+ActionButton.Font = Enum.Font.SourceSansBold
+ActionButton.BorderSizePixel = 0
+ActionButton.ZIndex = 2
+ActionButton.Parent = MainMenu
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 8)
+ButtonCorner.Parent = ActionButton
+
+-- Tròn đếm ngược 5s
+local StatusCircle = Instance.new("Frame")
+StatusCircle.Name = "StatusCircle"
+StatusCircle.Size = UDim2.new(0, 50, 0, 50)
+StatusCircle.Position = UDim2.new(0.5, -25, 0, -60)
+StatusCircle.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+StatusCircle.BorderSizePixel = 0
+StatusCircle.Visible = false
+StatusCircle.Parent = MainMenu
+
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1, 0)
+CircleCorner.Parent = StatusCircle
+
+local CountdownLabel = Instance.new("TextLabel")
+CountdownLabel.Size = UDim2.new(1, 0, 1, 0)
+CountdownLabel.BackgroundTransparency = 1
+CountdownLabel.Text = "5"
+CountdownLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+CountdownLabel.TextSize = 22
+CountdownLabel.Font = Enum.Font.SourceSansBold
+CountdownLabel.Parent = StatusCircle
+
+-------------------------------------------------------------------------
+-- LOGIC XỬ LÝ ĐÔNG CỨNG & ĐẾM NGƯỢC
+-------------------------------------------------------------------------
+
+local FREEZE_DURATION = 5.0
+local isActive = false
+local snapshots = {}
+local renderConnection = nil
+local colorCorrection = nil
+local startTime = 0
+
+local function takeSnapshots()
+    table.clear(snapshots)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                snapshots[player] = { CFrame = root.CFrame }
+            end
+        end
+    end
+end
+
+local function stopVisualFreeze()
+    if not isActive then return end
+    isActive = false
+    
+    if renderConnection then
+        renderConnection:Disconnect()
+        renderConnection = nil
+    end
+    
+    if colorCorrection then
+        colorCorrection:Destroy()
+        colorCorrection = nil
+    end
+    
+    for player, _ in pairs(snapshots) do
+        if player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+                    track:AdjustSpeed(1)
+                end
+            end
+        end
+    end
+    
+    StatusCircle.Visible = false
+    ActionButton.Text = "BẬT ĐÔNG CỨNG"
+    ActionButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+end
+
+local function startVisualFreeze()
+    if isActive then return end
+    isActive = true
+    startTime = os.clock()
+    
+    ActionButton.Text = "TẮT TÍNH NĂNG"
+    ActionButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+    StatusCircle.Visible = true
+    CountdownLabel.Text = tostring(FREEZE_DURATION)
+    
+    takeSnapshots()
+    
+    colorCorrection = Instance.new("ColorCorrectionEffect")
+    colorCorrection.Saturation = -0.5
+    colorCorrection.TintColor = Color3.fromRGB(150, 180, 200)
+    colorCorrection.Parent = game.Workspace.CurrentCamera
+    
+    renderConnection = RunService.RenderStepped:Connect(function()
+        local elapsedTime = os.clock() - startTime
+        local timeLeft = math.max(0, math.ceil(FREEZE_DURATION - elapsedTime))
+        
+        CountdownLabel.Text = tostring(timeLeft)
+        
+        if elapsedTime >= FREEZE_DURATION then
+            stopVisualFreeze()
+            return
+        end
+        
+        for player, data in pairs(snapshots) do
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local root = player.Character.HumanoidRootPart
+                root.CFrame = data.CFrame
+                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                root.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+                        track:AdjustSpeed(0)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+ActionButton.MouseButton1Click:Connect(function()
+    if isActive then
+        stopVisualFreeze()
+    else
+        startVisualFreeze()
+    end
+end)
