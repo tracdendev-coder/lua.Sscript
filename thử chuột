@@ -1,1 +1,180 @@
+-- Script Test Hình Ảnh Có Công Tắc Gạt (Switch) Thay Vì Nút Bấm
+local Players = game:GetService("Players")
+local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
+-- Xóa bảng test cũ nếu có
+if PlayerGui:FindFirstChild("TestImageGui") then
+    PlayerGui["TestImageGui"]:Destroy()
+end
+
+-- Tạo ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TestImageGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+-- Khung chính
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 340, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -170, 0.5, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
+
+-- Tiêu đề
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -40, 0, 35)
+Title.Position = UDim2.new(0, 10, 0, 0)
+Title.Text = "Tool Test ID Ảnh + Switch"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+Title.BackgroundTransparency = 1
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = MainFrame
+
+-- Nút đóng (X)
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -35, 0, 5)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseBtn.Parent = MainFrame
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+CloseBtn.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
+
+-- Ô nhập ID
+local IDTextBox = Instance.new("TextBox")
+IDTextBox.Size = UDim2.new(1, -20, 0, 35)
+IDTextBox.Position = UDim2.new(0, 10, 0, 45)
+IDTextBox.PlaceholderText = "Nhập ID Asset hoặc rbxthumb..."
+IDTextBox.Text = "134759374241732"
+IDTextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+IDTextBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+IDTextBox.TextSize = 12
+IDTextBox.Font = Enum.Font.SourceSans
+IDTextBox.ClearTextOnFocus = false
+IDTextBox.Parent = MainFrame
+Instance.new("UICorner", IDTextBox).CornerRadius = UDim.new(0, 6)
+
+-- ================================================================
+-- CÔNG TẮC GẠT (SWITCH) - THAY CHO NÚT BẤM
+-- ================================================================
+
+-- Khung chứa công tắc
+local SwitchContainer = Instance.new("Frame")
+SwitchContainer.Size = UDim2.new(1, -20, 0, 40)
+SwitchContainer.Position = UDim2.new(0, 10, 0, 90)
+SwitchContainer.BackgroundTransparency = 1
+SwitchContainer.Parent = MainFrame
+
+-- Nhãn "Bật/Tắt ảnh"
+local SwitchLabel = Instance.new("TextLabel")
+SwitchLabel.Size = UDim2.new(0.6, 0, 1, 0)
+SwitchLabel.Position = UDim2.new(0, 0, 0, 0)
+SwitchLabel.Text = "Hiển thị ảnh:"
+SwitchLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+SwitchLabel.TextSize = 14
+SwitchLabel.Font = Enum.Font.SourceSansBold
+SwitchLabel.BackgroundTransparency = 1
+SwitchLabel.TextXAlignment = Enum.TextXAlignment.Left
+SwitchLabel.Parent = SwitchContainer
+
+-- Thân công tắc (nền)
+local SwitchBg = Instance.new("TextButton")
+SwitchBg.Size = UDim2.new(0, 60, 0, 28)
+SwitchBg.Position = UDim2.new(1, -65, 0.5, -14)
+SwitchBg.BackgroundColor3 = Color3.fromRGB(220, 53, 69) -- ĐỎ = TẮT
+SwitchBg.Text = ""
+SwitchBg.ZIndex = 2
+SwitchBg.Parent = SwitchContainer
+Instance.new("UICorner", SwitchBg).CornerRadius = UDim.new(1, 0)
+
+-- Chữ ON/OFF bên trong
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.new(1, 0, 1, 0)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "TẮT"
+StatusText.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatusText.TextSize = 10
+StatusText.Font = Enum.Font.SourceSansBold
+StatusText.Position = UDim2.new(0, 10, 0, 0)
+StatusText.ZIndex = 2
+StatusText.Parent = SwitchBg
+
+-- Chấm tròn trượt
+local CircleSlider = Instance.new("Frame")
+CircleSlider.Size = UDim2.new(0, 22, 0, 22)
+CircleSlider.Position = UDim2.new(0, 3, 0, 3) -- Trái = TẮT
+CircleSlider.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+CircleSlider.ZIndex = 3
+CircleSlider.Parent = SwitchBg
+Instance.new("UICorner", CircleSlider).CornerRadius = UDim.new(1, 0)
+
+-- Biến trạng thái
+local isSwitchOn = false
+
+-- Hàm cập nhật công tắc
+local function updateSwitch()
+    if isSwitchOn then
+        SwitchBg.BackgroundColor3 = Color3.fromRGB(40, 167, 69) -- XANH = BẬT
+        CircleSlider.Position = UDim2.new(1, -25, 0, 3)
+        StatusText.Text = "BẬT"
+        StatusText.Position = UDim2.new(0, -10, 0, 0)
+        ImageLabel.Visible = true
+    else
+        SwitchBg.BackgroundColor3 = Color3.fromRGB(220, 53, 69) -- ĐỎ = TẮT
+        CircleSlider.Position = UDim2.new(0, 3, 0, 3)
+        StatusText.Text = "TẮT"
+        StatusText.Position = UDim2.new(0, 10, 0, 0)
+        ImageLabel.Visible = false
+    end
+end
+
+-- Sự kiện bấm vào công tắc
+SwitchBg.MouseButton1Click:Connect(function()
+    isSwitchOn = not isSwitchOn
+    updateSwitch()
+end)
+
+-- Khung hiển thị ảnh
+local ImageLabel = Instance.new("ImageLabel")
+ImageLabel.Size = UDim2.new(1, -20, 0, 210)
+ImageLabel.Position = UDim2.new(0, 10, 0, 140)
+ImageLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+ImageLabel.ScaleType = Enum.ScaleType.Stretch
+ImageLabel.BackgroundTransparency = 0.5
+ImageLabel.Visible = false  -- Mặc định tắt
+ImageLabel.Parent = MainFrame
+Instance.new("UICorner", ImageLabel).CornerRadius = UDim.new(0, 6)
+
+-- Hàm cập nhật ảnh
+local function updateImage(inputString)
+    inputString = inputString:gsub("%s+", "")
+    if inputString == "" then return end
+    if tonumber(inputString) then
+        ImageLabel.Image = "rbxthumb://type=Asset&id=" .. inputString .. "&w=420&h=420"
+    else
+        ImageLabel.Image = inputString
+    end
+    -- Nếu công tắc đang bật, hiển thị ảnh mới
+    if isSwitchOn then
+        ImageLabel.Visible = true
+    end
+end
+
+-- Load ảnh mặc định
+updateImage(IDTextBox.Text)
+
+-- Sự kiện khi nhập ID mới
+IDTextBox.FocusLost:Connect(function(enterPressed)
+    updateImage(IDTextBox.Text)
+end)
+
+-- Khởi tạo trạng thái ban đầu (TẮT)
+updateSwitch()
+
+print("✅ Script đã chạy! Dùng công tắc gạt để bật/tắt ảnh.")
