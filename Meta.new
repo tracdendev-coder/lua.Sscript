@@ -1,5 +1,5 @@
 -- Script Local cho Roblox (đặt trong StarterGui hoặc StarterPlayerScripts)
--- Chức năng: ESP khung hitbox hình vuông, menu kéo thả, phóng to thu nhỏ, bật tắt.
+-- ESP khung hitbox hình vuông, menu kéo thả, thu nhỏ giữ nút bật/tắt, khung bám chính xác theo người chơi khi zoom.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -13,8 +13,8 @@ gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ==== BIẾN TOÀN CỤC ====
 local espEnabled = true
-local boxSize = 120  -- kích thước cạnh hình vuông (px)
-local espObjects = {} -- bảng lưu Frame cho từng người chơi
+local boxSize = 120
+local espObjects = {}
 
 -- ==== TẠO MENU CHÍNH ====
 local mainFrame = Instance.new("Frame")
@@ -27,7 +27,7 @@ mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 200)
 mainFrame.ClipsDescendants = true
 mainFrame.Parent = gui
 
--- Tiêu đề (thanh kéo)
+-- Thanh tiêu đề (kéo thả)
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 25)
 titleBar.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
@@ -37,36 +37,36 @@ titleBar.Parent = mainFrame
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 1, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "  ESP HACK v3.0 (orimo)"
+titleLabel.Text = "  ESP HACK v3.1 (orimo)"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 14
 titleLabel.Parent = titleBar
 
--- Nút đóng (thu nhỏ menu)
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 20, 0, 20)
-closeBtn.Position = UDim2.new(1, -25, 0, 2)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
-closeBtn.Text = "-"
-closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 16
-closeBtn.Parent = titleBar
+-- Nút thu nhỏ / mở rộng
+local toggleMenuBtn = Instance.new("TextButton")
+toggleMenuBtn.Size = UDim2.new(0, 20, 0, 20)
+toggleMenuBtn.Position = UDim2.new(1, -25, 0, 2)
+toggleMenuBtn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+toggleMenuBtn.Text = "-"
+toggleMenuBtn.TextColor3 = Color3.fromRGB(255,255,255)
+toggleMenuBtn.Font = Enum.Font.GothamBold
+toggleMenuBtn.TextSize = 16
+toggleMenuBtn.Parent = titleBar
 
--- Nút bật/tắt ESP
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 100, 0, 30)
-toggleBtn.Position = UDim2.new(0.5, -50, 0, 45)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-toggleBtn.Text = "TẮT ESP"
-toggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.TextSize = 14
-toggleBtn.Parent = mainFrame
+-- Nút bật/tắt ESP (luôn hiển thị)
+local toggleEspBtn = Instance.new("TextButton")
+toggleEspBtn.Size = UDim2.new(0, 100, 0, 30)
+toggleEspBtn.Position = UDim2.new(0.5, -50, 0, 45)
+toggleEspBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+toggleEspBtn.Text = "TẮT ESP"
+toggleEspBtn.TextColor3 = Color3.fromRGB(255,255,255)
+toggleEspBtn.Font = Enum.Font.GothamBold
+toggleEspBtn.TextSize = 14
+toggleEspBtn.Parent = mainFrame
 
--- Thanh trượt kích thước khung
+-- Thanh trượt kích thước
 local sizeLabel = Instance.new("TextLabel")
 sizeLabel.Size = UDim2.new(0, 80, 0, 20)
 sizeLabel.Position = UDim2.new(0, 10, 0, 85)
@@ -88,7 +88,6 @@ sizeSlider.Font = Enum.Font.Gotham
 sizeSlider.TextSize = 12
 sizeSlider.Parent = mainFrame
 
--- Nút Reset vị trí menu
 local resetPosBtn = Instance.new("TextButton")
 resetPosBtn.Size = UDim2.new(0, 80, 0, 25)
 resetPosBtn.Position = UDim2.new(0.5, -40, 0, 130)
@@ -99,7 +98,7 @@ resetPosBtn.Font = Enum.Font.Gotham
 resetPosBtn.TextSize = 12
 resetPosBtn.Parent = mainFrame
 
--- ==== LOGIC KÉO THẢ MENU ====
+-- ==== KÉO THẢ MENU ====
 local dragging = false
 local dragInput, dragStart, startPos
 
@@ -132,35 +131,33 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- ==== NÚT ĐÓNG/THU NHỎ ====
+-- ==== THU NHỎ / MỞ RỘNG MENU (GIỮ NÚT BẬT TẮT ESP) ====
 local menuMinimized = false
-closeBtn.MouseButton1Click:Connect(function()
+toggleMenuBtn.MouseButton1Click:Connect(function()
     menuMinimized = not menuMinimized
     if menuMinimized then
-        mainFrame.Size = UDim2.new(0, 250, 0, 30)
-        closeBtn.Text = "+"
-        -- ẩn các thành phần khác
-        toggleBtn.Visible = false
+        mainFrame.Size = UDim2.new(0, 250, 0, 60)          -- chỉ đủ cho title + toggleEspBtn
+        toggleMenuBtn.Text = "+"
+        -- ẩn các thành phần phụ, giữ toggleEspBtn hiển thị
         sizeLabel.Visible = false
         sizeSlider.Visible = false
         resetPosBtn.Visible = false
+        -- toggleEspBtn vẫn hiển thị (đã là true mặc định)
     else
         mainFrame.Size = UDim2.new(0, 250, 0, 180)
-        closeBtn.Text = "-"
-        toggleBtn.Visible = true
+        toggleMenuBtn.Text = "-"
         sizeLabel.Visible = true
         sizeSlider.Visible = true
         resetPosBtn.Visible = true
     end
 end)
 
--- ==== LOGIC BẬT TẮT ESP ====
-toggleBtn.MouseButton1Click:Connect(function()
+-- ==== BẬT TẮT ESP ====
+toggleEspBtn.MouseButton1Click:Connect(function()
     espEnabled = not espEnabled
-    toggleBtn.Text = espEnabled and "TẮT ESP" or "BẬT ESP"
-    toggleBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(0,180,80) or Color3.fromRGB(180,50,50)
+    toggleEspBtn.Text = espEnabled and "TẮT ESP" or "BẬT ESP"
+    toggleEspBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(0,180,80) or Color3.fromRGB(180,50,50)
     if not espEnabled then
-        -- Xóa toàn bộ khung ESP
         for _, obj in pairs(espObjects) do
             if obj and obj.Parent then obj:Destroy() end
         end
@@ -168,7 +165,7 @@ toggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ==== THAY ĐỔI KÍCH THƯỚC ====
+-- ==== THAY ĐỔI KÍCH THƯỚC KHUNG ====
 sizeSlider.FocusLost:Connect(function(enter)
     if enter then
         local num = tonumber(sizeSlider.Text)
@@ -180,12 +177,12 @@ sizeSlider.FocusLost:Connect(function(enter)
     end
 end)
 
--- Reset vị trí
+-- Reset vị trí menu
 resetPosBtn.MouseButton1Click:Connect(function()
     mainFrame.Position = UDim2.new(0, 50, 0, 50)
 end)
 
--- ==== TẠO KHUNG ESP CHO MỘT NGƯỜI CHƠI ====
+-- ==== TẠO KHUNG ESP ====
 local function createEspFrame(player)
     if espObjects[player] then return end
     local frame = Instance.new("Frame")
@@ -200,7 +197,7 @@ local function createEspFrame(player)
     espObjects[player] = frame
 end
 
--- ==== CẬP NHẬT VỊ TRÍ KHUNG ====
+-- ==== CẬP NHẬT VỊ TRÍ KHUNG (BÁM THEO HITBOX) ====
 local function updateEsp()
     if not espEnabled then return end
     local localChar = LocalPlayer.Character
@@ -215,33 +212,25 @@ local function updateEsp()
                 local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
                 if head and torso then
                     local headPos = head.Position
-                    local footPos = torso.Position - Vector3.new(0, 2.5, 0) -- ước tính chân
+                    local footPos = torso.Position - Vector3.new(0, 2.5, 0)
 
                     local screenRoot, onScreen = Camera:WorldToScreenPoint(rootPos)
-                    local screenHead, _ = Camera:WorldToScreenPoint(headPos)
-                    local screenFoot, _ = Camera:WorldToScreenPoint(footPos)
-
                     if onScreen and screenRoot.Z > 0 then
-                        local dist = (screenHead.Y - screenFoot.Y)
-                        local size = math.clamp(dist * 0.8, 30, 250)
-                        -- sử dụng kích thước từ thanh trượt, nhưng có thể điều chỉnh theo khoảng cách
-                        local finalSize = boxSize -- hoặc có thể dùng size động, để đơn giản dùng boxSize
-
                         local frame = espObjects[player]
                         if not frame then
                             createEspFrame(player)
                             frame = espObjects[player]
                         end
                         if frame then
-                            frame.Size = UDim2.new(0, finalSize, 0, finalSize)
+                            -- Kích thước cố định theo boxSize, nhưng có thể dùng khoảng cách để tự động co giãn nếu muốn (giữ nguyên để đơn giản)
+                            frame.Size = UDim2.new(0, boxSize, 0, boxSize)
                             frame.Position = UDim2.new(
-                                0, screenRoot.X - finalSize/2,
-                                0, screenRoot.Y - finalSize/2
+                                0, screenRoot.X - boxSize/2,
+                                0, screenRoot.Y - boxSize/2
                             )
                             frame.Visible = true
                         end
                     else
-                        -- ẩn nếu không trên màn hình
                         local frame = espObjects[player]
                         if frame then frame.Visible = false end
                     end
@@ -254,7 +243,7 @@ local function updateEsp()
     end
 end
 
--- ==== XÓA ESP CHO NGƯỜI RỜI ====
+-- ==== XÓA KHI NGƯỜI CHƠI RỜI ====
 Players.PlayerRemoving:Connect(function(player)
     local frame = espObjects[player]
     if frame then
@@ -263,26 +252,26 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
--- ==== VÒNG LẶP CHÍNH ====
+-- ==== VÒNG LẶP RENDER ====
 RunService.RenderStepped:Connect(function()
     updateEsp()
 end)
 
--- ==== KHỞI TẠO ESP CHO CÁC NGƯỜI CHƠI HIỆN TẠI ====
+-- ==== KHỞI TẠO CHO NGƯỜI CHƠI HIỆN TẠI ====
 for _, player in pairs(Players:GetPlayers()) do
     if player ~= LocalPlayer then
         createEspFrame(player)
     end
 end
 
--- ==== THÊM NGƯỜI CHƠI MỚI ====
+-- ==== NGƯỜI CHƠI MỚI ====
 Players.PlayerAdded:Connect(function(player)
     if player ~= LocalPlayer then
         createEspFrame(player)
     end
 end)
 
--- ==== XÓA SẠCH KHI DISABLE ====
+-- ==== DỌN DẸP KHI GUI BỊ XÓA ====
 gui.AncestryChanged:Connect(function()
     if not gui.Parent then
         for _, frame in pairs(espObjects) do
