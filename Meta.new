@@ -1,224 +1,293 @@
--- Smart Speed Menu v1.0
--- Tác giả: bạn
--- Mô tả: Menu điều chỉnh WalkSpeed có kéo thả, thu gọn, lưu nhớ
+-- Script Local cho Roblox (đặt trong StarterGui hoặc StarterPlayerScripts)
+-- Chức năng: ESP khung hitbox hình vuông, menu kéo thả, phóng to thu nhỏ, bật tắt.
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local Camera = workspace.CurrentCamera
 
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
+local LocalPlayer = Players.LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "ESP_Menu_Hack"
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local DEFAULT_SPEED = 16
-local currentSpeed = humanoid.WalkSpeed
-local lastSpeed = DEFAULT_SPEED
+-- ==== BIẾN TOÀN CỤC ====
+local espEnabled = true
+local boxSize = 120  -- kích thước cạnh hình vuông (px)
+local espObjects = {} -- bảng lưu Frame cho từng người chơi
 
--- Tạo GUI
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SmartSpeedMenu"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.Parent = player:WaitForChild("PlayerGui")
+-- ==== TẠO MENU CHÍNH ====
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 250, 0, 180)
+mainFrame.Position = UDim2.new(0, 50, 0, 50)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+mainFrame.BackgroundTransparency = 0.15
+mainFrame.BorderSizePixel = 1
+mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 200)
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = gui
 
--- Khung chính
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 260, 0, 160)
-MainFrame.Position = UDim2.new(0.5, -130, 0.5, -80)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Draggable = false -- tự code drag để mượt hơn trên mobile
-MainFrame.Parent = ScreenGui
+-- Tiêu đề (thanh kéo)
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+titleBar.BackgroundTransparency = 0.3
+titleBar.Parent = mainFrame
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 10)
-UICorner.Parent = MainFrame
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 1, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "  ESP HACK v3.0 (orimo)"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 14
+titleLabel.Parent = titleBar
 
-local UIStroke = Instance.new("UIStroke")
-UIStroke.Color = Color3.fromRGB(80, 80, 100)
-UIStroke.Thickness = 1.5
-UIStroke.Parent = MainFrame
+-- Nút đóng (thu nhỏ menu)
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 20, 0, 20)
+closeBtn.Position = UDim2.new(1, -25, 0, 2)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
+closeBtn.Text = "-"
+closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 16
+closeBtn.Parent = titleBar
 
--- Thanh tiêu đề để kéo
-local TitleBar = Instance.new("Frame")
-TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, 30)
-TitleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
+-- Nút bật/tắt ESP
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 100, 0, 30)
+toggleBtn.Position = UDim2.new(0.5, -50, 0, 45)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+toggleBtn.Text = "TẮT ESP"
+toggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 14
+toggleBtn.Parent = mainFrame
 
-local Title = Instance.new("TextLabel")
-Title.Text = "Tốc Độ Thông Minh"
-Title.Size = UDim2.new(1, -60, 1, 0)
-Title.Position = UDim2.new(0, 10, 0, 0)
-Title.BackgroundTransparency = 1
-Title.TextColor3 = Color3.fromRGB(240, 240, 240)
-Title.Font = Enum.Font.GothamBold
-Title.TextSize = 14
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = TitleBar
+-- Thanh trượt kích thước khung
+local sizeLabel = Instance.new("TextLabel")
+sizeLabel.Size = UDim2.new(0, 80, 0, 20)
+sizeLabel.Position = UDim2.new(0, 10, 0, 85)
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.Text = "Kích thước:"
+sizeLabel.TextColor3 = Color3.fromRGB(200,200,200)
+sizeLabel.TextSize = 12
+sizeLabel.Font = Enum.Font.Gotham
+sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
+sizeLabel.Parent = mainFrame
 
--- Nút Thu nhỏ / Phóng to
-local MinimizeBtn = Instance.new("TextButton")
-MinimizeBtn.Size = UDim2.new(0, 25, 0, 25)
-MinimizeBtn.Position = UDim2.new(1, -55, 0, 3)
-MinimizeBtn.Text = "-"
-MinimizeBtn.Font = Enum.Font.GothamBold
-MinimizeBtn.TextSize = 18
-MinimizeBtn.TextColor3 = Color3.white
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-MinimizeBtn.Parent = TitleBar
+local sizeSlider = Instance.new("TextBox")
+sizeSlider.Size = UDim2.new(0, 60, 0, 20)
+sizeSlider.Position = UDim2.new(0, 100, 0, 85)
+sizeSlider.BackgroundColor3 = Color3.fromRGB(40,40,50)
+sizeSlider.Text = tostring(boxSize)
+sizeSlider.TextColor3 = Color3.fromRGB(255,255,255)
+sizeSlider.Font = Enum.Font.Gotham
+sizeSlider.TextSize = 12
+sizeSlider.Parent = mainFrame
 
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 25, 0, 25)
-CloseBtn.Position = UDim2.new(1, -28, 0, 3)
-CloseBtn.Text = "X"
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 14
-CloseBtn.TextColor3 = Color3.white
-CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-CloseBtn.Parent = TitleBar
+-- Nút Reset vị trí menu
+local resetPosBtn = Instance.new("TextButton")
+resetPosBtn.Size = UDim2.new(0, 80, 0, 25)
+resetPosBtn.Position = UDim2.new(0.5, -40, 0, 130)
+resetPosBtn.BackgroundColor3 = Color3.fromRGB(80,80,120)
+resetPosBtn.Text = "Reset vị trí"
+resetPosBtn.TextColor3 = Color3.fromRGB(255,255,255)
+resetPosBtn.Font = Enum.Font.Gotham
+resetPosBtn.TextSize = 12
+resetPosBtn.Parent = mainFrame
 
-for _,btn in pairs({MinimizeBtn, CloseBtn}) do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,6); c.Parent = btn
-end
+-- ==== LOGIC KÉO THẢ MENU ====
+local dragging = false
+local dragInput, dragStart, startPos
 
--- Nội dung
-local Content = Instance.new("Frame")
-Content.Size = UDim2.new(1, -20, 1, -50)
-Content.Position = UDim2.new(0, 10, 0, 40)
-Content.BackgroundTransparency = 1
-Content.Parent = MainFrame
-
--- Ô nhập liệu
-local SpeedBox = Instance.new("TextBox")
-SpeedBox.Size = UDim2.new(1, 0, 0, 35)
-SpeedBox.PlaceholderText = "Nhập tốc độ..."
-SpeedBox.Text = tostring(currentSpeed)
-SpeedBox.Text = tostring(lastSpeed) -- Bộ nhớ lần chạy cuối
-SpeedBox.Font = Enum.Font.Gotham
-SpeedBox.TextSize = 16
-SpeedBox.TextColor3 = Color3.white
-SpeedBox.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-SpeedBox.ClearTextOnFocus = false
-SpeedBox.Parent = Content
-local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0,6); c2.Parent = SpeedBox
-
--- Nút Áp dụng
-local ApplyBtn = Instance.new("TextButton")
-ApplyBtn.Size = UDim2.new(1, 0, 0, 35)
-ApplyBtn.Position = UDim2.new(0, 0, 0, 45)
-ApplyBtn.Text = "ÁP DỤNG"
-ApplyBtn.Font = Enum.Font.GothamBold
-ApplyBtn.TextSize = 16
-ApplyBtn.TextColor3 = Color3.white
-ApplyBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 90)
-ApplyBtn.Parent = Content
-local c3 = Instance.new("UICorner"); c3.CornerRadius = UDim.new(0,6); c3.Parent = ApplyBtn
-
--- Nút Mặc định
-local DefaultBtn = Instance.new("TextButton")
-DefaultBtn.Size = UDim2.new(1, 0, 0, 30)
-DefaultBtn.Position = UDim2.new(0, 0, 0, 88)
-DefaultBtn.Text = "Về mặc định: 16"
-DefaultBtn.Font = Enum.Font.Gotham
-DefaultBtn.TextSize = 14
-DefaultBtn.TextColor3 = Color3.white
-DefaultBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 90)
-DefaultBtn.Parent = Content
-local c4 = Instance.new("UICorner"); c4.CornerRadius = UDim.new(0,6); c4.Parent = DefaultBtn
-
--- Dòng phản hồi
-local Feedback = Instance.new("TextLabel")
-Feedback.Size = UDim2.new(1, 0, 0, 20)
-Feedback.Position = UDim2.new(0, 0, 0, 122)
-Feedback.BackgroundTransparency = 1
-Feedback.Text = ""
-Feedback.Font = Enum.Font.Gotham
-Feedback.TextSize = 13
-Feedback.TextColor3 = Color3.fromRGB(180, 255, 180)
-Feedback.Parent = Content
-
--- Hàm đổi tốc độ
-local function setSpeed(speed)
-	if speed > 0 then
-		humanoid.WalkSpeed = speed
-		lastSpeed = speed
-	Feedback.Text = "✅ Tốc độ mới: "..speed
-	Feedback.TextColor3 = Color3.fromRGB(180, 255, 180)
-	else
-	Feedback.Text = "⚠️ Vui lòng nhập số hợp lệ"
-	Feedback.TextColor3 = Color3.fromRGB(255, 180, 180)
-	end
-end
-
-ApplyBtn.MouseButton1Click:Connect(function()
-	local num = tonumber(SpeedBox.Text)
-	if num then
-		setSpeed(num)
-	else
-		setSpeed(-1)
-	end
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
 end)
 
-DefaultBtn.MouseButton1Click:Connect(function()
-	SpeedBox.Text = tostring(DEFAULT_SPEED)
-	setSpeed(DEFAULT_SPEED)
-end)
-
--- Thu gọn
-local minimized = false
-MinimizeBtn.MouseButton1Click:Connect(function()
-	minimized = not minimized
-	if minimized then
-		TweenService:Create(MainFrame, TweenInfo.new(0.2), {Size = UDim2.new(0, 260, 0, 30)}):Play()
-	Content.Visible = false
-	MinimizeBtn.Text = "+"
-	else
-		TweenService:Create(MainFrame, TweenInfo.new(0.2), {Size = UDim2.new(0, 260, 0, 160)}):Play()
-		Content.Visible = true
-	MinimizeBtn.Text = "-"
-	end
-end)
-
-CloseBtn.MouseButton1Click:Connect(function()
-	ScreenGui:Destroy()
-end)
-
--- Kéo thả cho cả PC và Mobile
-local dragging, dragInput, dragStart, startPos
-TitleBar.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = MainFrame.Position
-		
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-
-TitleBar.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		dragInput = input
-	end
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
-		local delta = input.Position - dragStart
-		MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-	end
+    if dragging and input == dragInput then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
 end)
 
--- Nhận diện tự động khi respawn
-player.CharacterAdded:Connect(function(char)
-	char:WaitForChild("Humanoid").WalkSpeed = lastSpeed
+-- ==== NÚT ĐÓNG/THU NHỎ ====
+local menuMinimized = false
+closeBtn.MouseButton1Click:Connect(function()
+    menuMinimized = not menuMinimized
+    if menuMinimized then
+        mainFrame.Size = UDim2.new(0, 250, 0, 30)
+        closeBtn.Text = "+"
+        -- ẩn các thành phần khác
+        toggleBtn.Visible = false
+        sizeLabel.Visible = false
+        sizeSlider.Visible = false
+        resetPosBtn.Visible = false
+    else
+        mainFrame.Size = UDim2.new(0, 250, 0, 180)
+        closeBtn.Text = "-"
+        toggleBtn.Visible = true
+        sizeLabel.Visible = true
+        sizeSlider.Visible = true
+        resetPosBtn.Visible = true
+    end
 end)
 
-Feedback.Text = "✅ Đã tải. Tốc độ hiện tại: "..humanoid.WalkSpeed
+-- ==== LOGIC BẬT TẮT ESP ====
+toggleBtn.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    toggleBtn.Text = espEnabled and "TẮT ESP" or "BẬT ESP"
+    toggleBtn.BackgroundColor3 = espEnabled and Color3.fromRGB(0,180,80) or Color3.fromRGB(180,50,50)
+    if not espEnabled then
+        -- Xóa toàn bộ khung ESP
+        for _, obj in pairs(espObjects) do
+            if obj and obj.Parent then obj:Destroy() end
+        end
+        espObjects = {}
+    end
+end)
+
+-- ==== THAY ĐỔI KÍCH THƯỚC ====
+sizeSlider.FocusLost:Connect(function(enter)
+    if enter then
+        local num = tonumber(sizeSlider.Text)
+        if num and num > 20 and num < 400 then
+            boxSize = num
+        else
+            sizeSlider.Text = tostring(boxSize)
+        end
+    end
+end)
+
+-- Reset vị trí
+resetPosBtn.MouseButton1Click:Connect(function()
+    mainFrame.Position = UDim2.new(0, 50, 0, 50)
+end)
+
+-- ==== TẠO KHUNG ESP CHO MỘT NGƯỜI CHƠI ====
+local function createEspFrame(player)
+    if espObjects[player] then return end
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, boxSize, 0, boxSize)
+    frame.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    frame.BackgroundTransparency = 0.6
+    frame.BorderSizePixel = 2
+    frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+    frame.Visible = true
+    frame.ZIndex = 10
+    frame.Parent = gui
+    espObjects[player] = frame
+end
+
+-- ==== CẬP NHẬT VỊ TRÍ KHUNG ====
+local function updateEsp()
+    if not espEnabled then return end
+    local localChar = LocalPlayer.Character
+    if not localChar or not localChar.PrimaryPart then return end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            if char and char.PrimaryPart then
+                local rootPos = char.PrimaryPart.Position
+                local head = char:FindFirstChild("Head")
+                local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+                if head and torso then
+                    local headPos = head.Position
+                    local footPos = torso.Position - Vector3.new(0, 2.5, 0) -- ước tính chân
+
+                    local screenRoot, onScreen = Camera:WorldToScreenPoint(rootPos)
+                    local screenHead, _ = Camera:WorldToScreenPoint(headPos)
+                    local screenFoot, _ = Camera:WorldToScreenPoint(footPos)
+
+                    if onScreen and screenRoot.Z > 0 then
+                        local dist = (screenHead.Y - screenFoot.Y)
+                        local size = math.clamp(dist * 0.8, 30, 250)
+                        -- sử dụng kích thước từ thanh trượt, nhưng có thể điều chỉnh theo khoảng cách
+                        local finalSize = boxSize -- hoặc có thể dùng size động, để đơn giản dùng boxSize
+
+                        local frame = espObjects[player]
+                        if not frame then
+                            createEspFrame(player)
+                            frame = espObjects[player]
+                        end
+                        if frame then
+                            frame.Size = UDim2.new(0, finalSize, 0, finalSize)
+                            frame.Position = UDim2.new(
+                                0, screenRoot.X - finalSize/2,
+                                0, screenRoot.Y - finalSize/2
+                            )
+                            frame.Visible = true
+                        end
+                    else
+                        -- ẩn nếu không trên màn hình
+                        local frame = espObjects[player]
+                        if frame then frame.Visible = false end
+                    end
+                end
+            else
+                local frame = espObjects[player]
+                if frame then frame.Visible = false end
+            end
+        end
+    end
+end
+
+-- ==== XÓA ESP CHO NGƯỜI RỜI ====
+Players.PlayerRemoving:Connect(function(player)
+    local frame = espObjects[player]
+    if frame then
+        frame:Destroy()
+        espObjects[player] = nil
+    end
+end)
+
+-- ==== VÒNG LẶP CHÍNH ====
+RunService.RenderStepped:Connect(function()
+    updateEsp()
+end)
+
+-- ==== KHỞI TẠO ESP CHO CÁC NGƯỜI CHƠI HIỆN TẠI ====
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        createEspFrame(player)
+    end
+end
+
+-- ==== THÊM NGƯỜI CHƠI MỚI ====
+Players.PlayerAdded:Connect(function(player)
+    if player ~= LocalPlayer then
+        createEspFrame(player)
+    end
+end)
+
+-- ==== XÓA SẠCH KHI DISABLE ====
+gui.AncestryChanged:Connect(function()
+    if not gui.Parent then
+        for _, frame in pairs(espObjects) do
+            if frame then frame:Destroy() end
+        end
+        espObjects = {}
+    end
+end)
