@@ -1,61 +1,49 @@
 -- =====================================================
--- ESP HACK v4.1 – KHUNG HÌNH VUÔNG HITBOX ĐỘNG, MENU KÉO THẢ CHUẨN
+-- ORBIT BLOCK v1.1 – MENU CÓ THANH TRƯỢT BÁN KÍNH (LocalScript)
 -- =====================================================
--- ĐẶT TRONG: StarterGui / StarterPlayerScripts (LocalScript)
--- =====================================================
-
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
-local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
+local remote = Instance.new("RemoteEvent")
+remote.Name = "OrbitControl"
+remote.Parent = ReplicatedStorage
+
+-- Tạo GUI
 local gui = Instance.new("ScreenGui")
-gui.Name = "ESP_Menu_Hack"
+gui.Name = "OrbitMenu"
 gui.ResetOnSpawn = false
 gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- ========== CẤU HÌNH ==========
-local ESP_ENABLED = true
-local SIZE_MULTIPLIER = 1.0
-local MIN_MULTIPLIER = 0.3
-local MAX_MULTIPLIER = 2.5
-local MENU_MINIMIZED = false
-
--- ========== BIẾN TOÀN CỤC ==========
-local espFrames = {}
-local activePlayers = {}
-
--- ========== TẠO MENU CHÍNH ==========
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 260, 0, 180)
+mainFrame.Size = UDim2.new(0, 320, 0, 260)  -- tăng chiều cao để chứa slider
 mainFrame.Position = UDim2.new(0, 50, 0, 50)
-mainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 25)
 mainFrame.BackgroundTransparency = 0.2
 mainFrame.BorderSizePixel = 1
-mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 200)
+mainFrame.BorderColor3 = Color3.fromRGB(255, 200, 0)
 mainFrame.ClipsDescendants = true
 mainFrame.Parent = gui
 
--- Thanh tiêu đề (kéo thả)
+-- Thanh tiêu đề
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 26)
-titleBar.BackgroundColor3 = Color3.fromRGB(0, 100, 180)
-titleBar.BackgroundTransparency = 0.4
+titleBar.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
+titleBar.BackgroundTransparency = 0.3
 titleBar.Parent = mainFrame
 
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, -30, 1, 0)
 titleLabel.Position = UDim2.new(0, 5, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "ESP HACK v4.1"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Text = "ORBIT BLOCK v1.1"
+titleLabel.TextColor3 = Color3.fromRGB(255,255,255)
 titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 14
 titleLabel.Parent = titleBar
 
--- Nút thu nhỏ
 local toggleMenuBtn = Instance.new("TextButton")
 toggleMenuBtn.Size = UDim2.new(0, 22, 0, 22)
 toggleMenuBtn.Position = UDim2.new(1, -26, 0, 2)
@@ -66,42 +54,111 @@ toggleMenuBtn.Font = Enum.Font.GothamBold
 toggleMenuBtn.TextSize = 18
 toggleMenuBtn.Parent = titleBar
 
--- Nút bật/tắt ESP
-local toggleEspBtn = Instance.new("TextButton")
-toggleEspBtn.Size = UDim2.new(0, 120, 0, 32)
-toggleEspBtn.Position = UDim2.new(0.5, -60, 0, 40)
-toggleEspBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-toggleEspBtn.Text = "TẮT ESP"
-toggleEspBtn.TextColor3 = Color3.fromRGB(255,255,255)
-toggleEspBtn.Font = Enum.Font.GothamBold
-toggleEspBtn.TextSize = 14
-toggleEspBtn.Parent = mainFrame
+-- Nút bật/tắt
+local toggleOrbitBtn = Instance.new("TextButton")
+toggleOrbitBtn.Size = UDim2.new(0, 130, 0, 32)
+toggleOrbitBtn.Position = UDim2.new(0.5, -65, 0, 40)
+toggleOrbitBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+toggleOrbitBtn.Text = "BẬT ORBIT"
+toggleOrbitBtn.TextColor3 = Color3.fromRGB(255,255,255)
+toggleOrbitBtn.Font = Enum.Font.GothamBold
+toggleOrbitBtn.TextSize = 14
+toggleOrbitBtn.Parent = mainFrame
 
--- Hệ số
-local sizeLabel = Instance.new("TextLabel")
-sizeLabel.Size = UDim2.new(0, 90, 0, 22)
-sizeLabel.Position = UDim2.new(0, 10, 0, 85)
-sizeLabel.BackgroundTransparency = 1
-sizeLabel.Text = "Hệ số:"
-sizeLabel.TextColor3 = Color3.fromRGB(200,200,200)
-sizeLabel.TextSize = 13
-sizeLabel.Font = Enum.Font.Gotham
-sizeLabel.TextXAlignment = Enum.TextXAlignment.Left
-sizeLabel.Parent = mainFrame
+-- === THANH TRƯỢT BÁN KÍNH ===
+local radiusLabel = Instance.new("TextLabel")
+radiusLabel.Size = UDim2.new(0, 80, 0, 22)
+radiusLabel.Position = UDim2.new(0, 10, 0, 85)
+radiusLabel.BackgroundTransparency = 1
+radiusLabel.Text = "Bán kính:"
+radiusLabel.TextColor3 = Color3.fromRGB(200,200,200)
+radiusLabel.TextSize = 13
+radiusLabel.Font = Enum.Font.Gotham
+radiusLabel.TextXAlignment = Enum.TextXAlignment.Left
+radiusLabel.Parent = mainFrame
 
-local sizeInput = Instance.new("TextBox")
-sizeInput.Size = UDim2.new(0, 60, 0, 22)
-sizeInput.Position = UDim2.new(0, 100, 0, 85)
-sizeInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
-sizeInput.Text = string.format("%.1f", SIZE_MULTIPLIER)
-sizeInput.TextColor3 = Color3.fromRGB(255,255,255)
-sizeInput.Font = Enum.Font.Gotham
-sizeInput.TextSize = 13
-sizeInput.Parent = mainFrame
+-- Giá trị hiển thị bên cạnh
+local radiusValueLabel = Instance.new("TextLabel")
+radiusValueLabel.Size = UDim2.new(0, 40, 0, 22)
+radiusValueLabel.Position = UDim2.new(0, 85, 0, 85)
+radiusValueLabel.BackgroundTransparency = 1
+radiusValueLabel.Text = "8"
+radiusValueLabel.TextColor3 = Color3.fromRGB(255,255,255)
+radiusValueLabel.TextSize = 13
+radiusValueLabel.Font = Enum.Font.GothamBold
+radiusValueLabel.TextXAlignment = Enum.TextXAlignment.Center
+radiusValueLabel.Parent = mainFrame
+
+-- Thanh trượt (slider)
+local sliderTrack = Instance.new("Frame")
+sliderTrack.Size = UDim2.new(0, 150, 0, 6)
+sliderTrack.Position = UDim2.new(0, 130, 0, 93) -- canh ngang với label
+sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+sliderTrack.BorderSizePixel = 0
+sliderTrack.Parent = mainFrame
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Size = UDim2.new(0.5, 0, 1, 0) -- mặc định 50%
+sliderFill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+sliderFill.BorderSizePixel = 0
+sliderFill.Parent = sliderTrack
+
+local sliderHandle = Instance.new("TextButton")
+sliderHandle.Size = UDim2.new(0, 16, 0, 16)
+sliderHandle.Position = UDim2.new(0.5, -8, 0, -5) -- canh giữa fill
+sliderHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+sliderHandle.Text = ""
+sliderHandle.BorderSizePixel = 1
+sliderHandle.BorderColor3 = Color3.fromRGB(0, 150, 200)
+sliderHandle.Parent = sliderTrack
+
+-- Tốc độ (giữ ô nhập)
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(0, 70, 0, 22)
+speedLabel.Position = UDim2.new(0, 10, 0, 125)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "Tốc độ:"
+speedLabel.TextColor3 = Color3.fromRGB(200,200,200)
+speedLabel.TextSize = 13
+speedLabel.Font = Enum.Font.Gotham
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Parent = mainFrame
+
+local speedInput = Instance.new("TextBox")
+speedInput.Size = UDim2.new(0, 60, 0, 22)
+speedInput.Position = UDim2.new(0, 85, 0, 125)
+speedInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
+speedInput.Text = "2"
+speedInput.TextColor3 = Color3.fromRGB(255,255,255)
+speedInput.Font = Enum.Font.Gotham
+speedInput.TextSize = 13
+speedInput.Parent = mainFrame
+
+-- Số lượng (giữ ô nhập)
+local countLabel = Instance.new("TextLabel")
+countLabel.Size = UDim2.new(0, 70, 0, 22)
+countLabel.Position = UDim2.new(0, 10, 0, 155)
+countLabel.BackgroundTransparency = 1
+countLabel.Text = "Số lượng:"
+countLabel.TextColor3 = Color3.fromRGB(200,200,200)
+countLabel.TextSize = 13
+countLabel.Font = Enum.Font.Gotham
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.Parent = mainFrame
+
+local countInput = Instance.new("TextBox")
+countInput.Size = UDim2.new(0, 60, 0, 22)
+countInput.Position = UDim2.new(0, 85, 0, 155)
+countInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
+countInput.Text = "12"
+countInput.TextColor3 = Color3.fromRGB(255,255,255)
+countInput.Font = Enum.Font.Gotham
+countInput.TextSize = 13
+countInput.Parent = mainFrame
 
 local resetPosBtn = Instance.new("TextButton")
 resetPosBtn.Size = UDim2.new(0, 90, 0, 26)
-resetPosBtn.Position = UDim2.new(0.5, -45, 0, 130)
+resetPosBtn.Position = UDim2.new(0.5, -45, 0, 195)
 resetPosBtn.BackgroundColor3 = Color3.fromRGB(70,70,110)
 resetPosBtn.Text = "Reset vị trí"
 resetPosBtn.TextColor3 = Color3.fromRGB(255,255,255)
@@ -109,212 +166,142 @@ resetPosBtn.Font = Enum.Font.Gotham
 resetPosBtn.TextSize = 12
 resetPosBtn.Parent = mainFrame
 
--- ========== KÉO THẢ MENU (dùng UserInputService) ==========
-local dragData = {
-    isDragging = false,
-    startMousePos = nil,
-    startFramePos = nil,
-    connection = nil
-}
-
-local function startDrag(input)
+-- === LOGIC KÉO THẢ MENU ===
+local dragData = { dragging = false, startPos = nil, startMouse = nil }
+titleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        -- Kiểm tra xem con trỏ có nằm trên titleBar không
-        local mousePos = input.Position
-        local absPos = titleBar.AbsolutePosition
-        local absSize = titleBar.AbsoluteSize
-        if mousePos.X >= absPos.X and mousePos.X <= absPos.X + absSize.X and
-           mousePos.Y >= absPos.Y and mousePos.Y <= absPos.Y + absSize.Y then
-            dragData.isDragging = true
-            dragData.startMousePos = input.Position
-            dragData.startFramePos = mainFrame.Position
-        end
+        dragData.dragging = true
+        dragData.startMouse = input.Position
+        dragData.startPos = mainFrame.Position
     end
-end
-
-local function updateDrag(input)
-    if dragData.isDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragData.startMousePos
+end)
+titleBar.InputChanged:Connect(function(input)
+    if dragData.dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragData.startMouse
         mainFrame.Position = UDim2.new(
-            dragData.startFramePos.X.Scale,
-            dragData.startFramePos.X.Offset + delta.X,
-            dragData.startFramePos.Y.Scale,
-            dragData.startFramePos.Y.Offset + delta.Y
+            dragData.startPos.X.Scale, dragData.startPos.X.Offset + delta.X,
+            dragData.startPos.Y.Scale, dragData.startPos.Y.Offset + delta.Y
         )
     end
-end
-
-local function endDrag(input)
+end)
+UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragData.isDragging = false
+        dragData.dragging = false
     end
-end
+end)
 
-UserInputService.InputBegan:Connect(startDrag)
-UserInputService.InputChanged:Connect(updateDrag)
-UserInputService.InputEnded:Connect(endDrag)
-
--- ========== THU NHỎ / MỞ RỘNG ==========
-local function updateMenuSize(minimized)
-    MENU_MINIMIZED = minimized
-    if minimized then
-        mainFrame.Size = UDim2.new(0, 260, 0, 66)
-        toggleMenuBtn.Text = "+"
-        sizeLabel.Visible = false
-        sizeInput.Visible = false
-        resetPosBtn.Visible = false
-        toggleEspBtn.Position = UDim2.new(0.5, -60, 0, 30)
-    else
-        mainFrame.Size = UDim2.new(0, 260, 0, 180)
-        toggleMenuBtn.Text = "-"
-        sizeLabel.Visible = true
-        sizeInput.Visible = true
-        resetPosBtn.Visible = true
-        toggleEspBtn.Position = UDim2.new(0.5, -60, 0, 40)
-    end
-end
-
+-- === THU NHỎ ===
+local minimized = false
 toggleMenuBtn.MouseButton1Click:Connect(function()
-    updateMenuSize(not MENU_MINIMIZED)
+    minimized = not minimized
+    mainFrame.Size = minimized and UDim2.new(0, 320, 0, 66) or UDim2.new(0, 320, 0, 260)
+    toggleMenuBtn.Text = minimized and "+" or "-"
+    -- ẩn tất cả thành phần phụ
+    radiusLabel.Visible = not minimized
+    radiusValueLabel.Visible = not minimized
+    sliderTrack.Visible = not minimized
+    speedLabel.Visible = not minimized
+    speedInput.Visible = not minimized
+    countLabel.Visible = not minimized
+    countInput.Visible = not minimized
+    resetPosBtn.Visible = not minimized
+    toggleOrbitBtn.Position = minimized and UDim2.new(0.5, -65, 0, 30) or UDim2.new(0.5, -65, 0, 40)
 end)
 
--- ========== BẬT/TẮT ESP ==========
-local function clearAllFrames()
-    for _, frame in pairs(espFrames) do
-        if frame and frame.Parent then frame:Destroy() end
-    end
-    espFrames = {}
-    activePlayers = {}
-end
+-- === LOGIC THANH TRƯỢT ===
+local minRadius = 2
+local maxRadius = 30
+local currentRadius = 8
 
-local function rebuildAllFrames()
-    clearAllFrames()
-    if not ESP_ENABLED then return end
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local frame = Instance.new("Frame")
-            frame.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-            frame.BackgroundTransparency = 0.6
-            frame.BorderSizePixel = 2
-            frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-            frame.Visible = true
-            frame.ZIndex = 10
-            frame.Parent = gui
-            espFrames[player] = frame
-            activePlayers[player] = true
-        end
-    end
-end
-
-toggleEspBtn.MouseButton1Click:Connect(function()
-    ESP_ENABLED = not ESP_ENABLED
-    toggleEspBtn.Text = ESP_ENABLED and "TẮT ESP" or "BẬT ESP"
-    toggleEspBtn.BackgroundColor3 = ESP_ENABLED and Color3.fromRGB(0,180,80) or Color3.fromRGB(180,50,50)
-    if ESP_ENABLED then
-        rebuildAllFrames()
-    else
-        clearAllFrames()
-    end
-end)
-
--- ========== HỆ SỐ KÍCH THƯỚC ==========
-local function applySizeMultiplier(value)
-    local num = tonumber(value)
-    if num then
-        SIZE_MULTIPLIER = math.clamp(num, MIN_MULTIPLIER, MAX_MULTIPLIER)
-        sizeInput.Text = string.format("%.1f", SIZE_MULTIPLIER)
-    else
-        sizeInput.Text = string.format("%.1f", SIZE_MULTIPLIER)
+local function updateSlider(value)
+    local clamped = math.clamp(value, minRadius, maxRadius)
+    currentRadius = clamped
+    radiusValueLabel.Text = tostring(math.round(clamped * 10) / 10) -- làm tròn 1 chữ số
+    -- Cập nhật fill và handle
+    local percent = (clamped - minRadius) / (maxRadius - minRadius)
+    sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+    sliderHandle.Position = UDim2.new(percent, -8, 0, -5)
+    -- Gửi lên server nếu đang bật
+    if toggleOrbitBtn.Text == "TẮT ORBIT" then
+        sendOrbitState()
     end
 end
 
-sizeInput.FocusLost:Connect(function(enter)
-    if enter then applySizeMultiplier(sizeInput.Text) end
+local function getSliderValueFromMouse(mouseX)
+    local trackPos = sliderTrack.AbsolutePosition.X
+    local trackSize = sliderTrack.AbsoluteSize.X
+    local relative = (mouseX - trackPos) / trackSize
+    return minRadius + relative * (maxRadius - minRadius)
+end
+
+local isDraggingSlider = false
+
+sliderHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDraggingSlider = true
+        local mousePos = input.Position
+        local val = getSliderValueFromMouse(mousePos.X)
+        updateSlider(val)
+    end
 end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isDraggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local val = getSliderValueFromMouse(input.Position.X)
+        updateSlider(val)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDraggingSlider = false
+    end
+end)
+
+-- Cũng cho phép click trên track để nhảy
+sliderTrack.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local val = getSliderValueFromMouse(input.Position.X)
+        updateSlider(val)
+    end
+end)
+
+-- === GỬI LỆNH ===
+local function sendOrbitState()
+    local data = {
+        enabled = (toggleOrbitBtn.Text == "TẮT ORBIT"),
+        radius = currentRadius,
+        speed = tonumber(speedInput.Text) or 2,
+        count = math.floor(tonumber(countInput.Text) or 12)
+    }
+    remote:FireServer(data)
+end
+
+local function toggleOrbit()
+    local isOn = toggleOrbitBtn.Text == "BẬT ORBIT"
+    toggleOrbitBtn.Text = isOn and "TẮT ORBIT" or "BẬT ORBIT"
+    toggleOrbitBtn.BackgroundColor3 = isOn and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(0, 180, 80)
+    sendOrbitState()
+end
+
+toggleOrbitBtn.MouseButton1Click:Connect(toggleOrbit)
+
+-- Gửi khi thay đổi thông số khác
+local function onParamChange()
+    if toggleOrbitBtn.Text == "TẮT ORBIT" then
+        sendOrbitState()
+    end
+end
+speedInput.FocusLost:Connect(onParamChange)
+countInput.FocusLost:Connect(onParamChange)
 
 resetPosBtn.MouseButton1Click:Connect(function()
     mainFrame.Position = UDim2.new(0, 50, 0, 50)
 end)
 
--- ========== CẬP NHẬT KHUNG ESP ==========
-local function updateEspFrames()
-    if not ESP_ENABLED then return end
-    for player, frame in pairs(espFrames) do
-        if player == LocalPlayer then continue end
-        local char = player.Character
-        if not char then frame.Visible = false continue end
-        local head = char:FindFirstChild("Head")
-        local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not head or not torso or not root then frame.Visible = false continue end
+-- Khởi tạo slider về mặc định
+updateSlider(8)
 
-        local headPos = head.Position
-        local footPos = torso.Position - Vector3.new(0, 2.5, 0)
-        local screenHead, onHead = Camera:WorldToScreenPoint(headPos)
-        local screenFoot, onFoot = Camera:WorldToScreenPoint(footPos)
-
-        if onHead and onFoot and screenHead.Z > 0 and screenFoot.Z > 0 then
-            local height = math.abs(screenHead.Y - screenFoot.Y)
-            local side = math.clamp(height * SIZE_MULTIPLIER, 10, 600)
-            local screenRoot, onRoot = Camera:WorldToScreenPoint(root.Position)
-            if not onRoot or screenRoot.Z <= 0 then frame.Visible = false continue end
-
-            frame.Size = UDim2.new(0, side, 0, side)
-            frame.Position = UDim2.new(0, screenRoot.X - side/2, 0, screenRoot.Y - side/2)
-            frame.Visible = true
-        else
-            frame.Visible = false
-        end
-    end
-end
-
--- ========== QUẢN LÝ NGƯỜI CHƠI ==========
-local function addPlayer(player)
-    if player == LocalPlayer or espFrames[player] then return end
-    local frame = Instance.new("Frame")
-    frame.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    frame.BackgroundTransparency = 0.6
-    frame.BorderSizePixel = 2
-    frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-    frame.Visible = true
-    frame.ZIndex = 10
-    frame.Parent = gui
-    espFrames[player] = frame
-    activePlayers[player] = true
-end
-
-local function removePlayer(player)
-    local frame = espFrames[player]
-    if frame then frame:Destroy() end
-    espFrames[player] = nil
-    activePlayers[player] = nil
-end
-
-Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        if ESP_ENABLED and player ~= LocalPlayer then addPlayer(player) end
-    end)
-    if player.Character then addPlayer(player) end
-end)
-
-Players.PlayerRemoving:Connect(removePlayer)
-
--- Khởi tạo ban đầu
-for _, player in pairs(Players:GetPlayers()) do
-    if player ~= LocalPlayer then
-        player.CharacterAdded:Connect(function()
-            if ESP_ENABLED then addPlayer(player) end
-        end)
-        if player.Character then addPlayer(player) end
-    end
-end
-
--- ========== VÒNG LẶP RENDER ==========
-RunService.RenderStepped:Connect(updateEspFrames)
-
--- ========== DỌN DẸP ==========
-gui.AncestryChanged:Connect(function()
-    if not gui.Parent then clearAllFrames() end
-end)
-
-print("ESP HACK v4.1 – Kéo thả menu bằng cách giữ chuột trên thanh tiêu đề.")
+-- Khởi tạo trạng thái tắt
+task.wait(1)
+remote:FireServer({ enabled = false })
