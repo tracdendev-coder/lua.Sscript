@@ -1,307 +1,254 @@
--- =====================================================
--- ORBIT BLOCK v1.1 – MENU CÓ THANH TRƯỢT BÁN KÍNH (LocalScript)
--- =====================================================
+-- ========== CLIENT: GỬI LỆNH LÊN SERVER ==========
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local LocalPlayer = Players.LocalPlayer
+local player = Players.LocalPlayer
+
+-- Tạo RemoteEvent nếu chưa có
 local remote = Instance.new("RemoteEvent")
 remote.Name = "OrbitControl"
 remote.Parent = ReplicatedStorage
 
--- Tạo GUI
-local gui = Instance.new("ScreenGui")
-gui.Name = "OrbitMenu"
-gui.ResetOnSpawn = false
-gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+-- Tạo GUI điều khiển
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "OrbitUI"
+screenGui.Parent = player:WaitForChild("PlayerGui")
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 320, 0, 260)  -- tăng chiều cao để chứa slider
-mainFrame.Position = UDim2.new(0, 50, 0, 50)
-mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 25)
-mainFrame.BackgroundTransparency = 0.2
-mainFrame.BorderSizePixel = 1
-mainFrame.BorderColor3 = Color3.fromRGB(255, 200, 0)
-mainFrame.ClipsDescendants = true
-mainFrame.Parent = gui
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 300, 0, 230)
+frame.Position = UDim2.new(0, 30, 0, 30)
+frame.BackgroundColor3 = Color3.fromRGB(20,20,35)
+frame.BackgroundTransparency = 0.2
+frame.BorderSizePixel = 2
+frame.BorderColor3 = Color3.fromRGB(255,200,50)
+frame.Parent = screenGui
 
--- Thanh tiêu đề
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 26)
-titleBar.BackgroundColor3 = Color3.fromRGB(200, 150, 0)
-titleBar.BackgroundTransparency = 0.3
-titleBar.Parent = mainFrame
+-- Thanh tiêu đề kéo thả
+local title = Instance.new("Frame")
+title.Size = UDim2.new(1,0,0,30)
+title.BackgroundColor3 = Color3.fromRGB(200,150,0)
+title.BackgroundTransparency = 0.3
+title.Parent = frame
 
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, -30, 1, 0)
-titleLabel.Position = UDim2.new(0, 5, 0, 0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "ORBIT BLOCK v1.1"
-titleLabel.TextColor3 = Color3.fromRGB(255,255,255)
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.TextSize = 14
-titleLabel.Parent = titleBar
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1,-30,1,0)
+titleText.Position = UDim2.new(0,5,0,0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "ORBIT SERVER v2.0"
+titleText.TextColor3 = Color3.new(1,1,1)
+titleText.Font = Enum.Font.GothamBold
+titleText.TextSize = 16
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = title
 
-local toggleMenuBtn = Instance.new("TextButton")
-toggleMenuBtn.Size = UDim2.new(0, 22, 0, 22)
-toggleMenuBtn.Position = UDim2.new(1, -26, 0, 2)
-toggleMenuBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
-toggleMenuBtn.Text = "-"
-toggleMenuBtn.TextColor3 = Color3.fromRGB(255,255,255)
-toggleMenuBtn.Font = Enum.Font.GothamBold
-toggleMenuBtn.TextSize = 18
-toggleMenuBtn.Parent = titleBar
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0,24,0,24)
+minBtn.Position = UDim2.new(1,-28,0,3)
+minBtn.BackgroundColor3 = Color3.fromRGB(200,40,40)
+minBtn.Text = "-"
+minBtn.TextColor3 = Color3.new(1,1,1)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 18
+minBtn.Parent = title
 
 -- Nút bật/tắt
-local toggleOrbitBtn = Instance.new("TextButton")
-toggleOrbitBtn.Size = UDim2.new(0, 130, 0, 32)
-toggleOrbitBtn.Position = UDim2.new(0.5, -65, 0, 40)
-toggleOrbitBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
-toggleOrbitBtn.Text = "BẬT ORBIT"
-toggleOrbitBtn.TextColor3 = Color3.fromRGB(255,255,255)
-toggleOrbitBtn.Font = Enum.Font.GothamBold
-toggleOrbitBtn.TextSize = 14
-toggleOrbitBtn.Parent = mainFrame
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0,140,0,36)
+toggleBtn.Position = UDim2.new(0.5,-70,0,45)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0,180,80)
+toggleBtn.Text = "BẬT ORBIT"
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 16
+toggleBtn.Parent = frame
 
--- === THANH TRƯỢT BÁN KÍNH ===
-local radiusLabel = Instance.new("TextLabel")
-radiusLabel.Size = UDim2.new(0, 80, 0, 22)
-radiusLabel.Position = UDim2.new(0, 10, 0, 85)
-radiusLabel.BackgroundTransparency = 1
-radiusLabel.Text = "Bán kính:"
-radiusLabel.TextColor3 = Color3.fromRGB(200,200,200)
-radiusLabel.TextSize = 13
-radiusLabel.Font = Enum.Font.Gotham
-radiusLabel.TextXAlignment = Enum.TextXAlignment.Left
-radiusLabel.Parent = mainFrame
+-- Thanh trượt bán kính
+local rLabel = Instance.new("TextLabel")
+rLabel.Size = UDim2.new(0,80,0,25)
+rLabel.Position = UDim2.new(0,10,0,95)
+rLabel.BackgroundTransparency = 1
+rLabel.Text = "Khoảng cách:"
+rLabel.TextColor3 = Color3.fromRGB(200,200,200)
+rLabel.Font = Enum.Font.Gotham
+rLabel.TextSize = 14
+rLabel.TextXAlignment = Enum.TextXAlignment.Left
+rLabel.Parent = frame
 
--- Giá trị hiển thị bên cạnh
-local radiusValueLabel = Instance.new("TextLabel")
-radiusValueLabel.Size = UDim2.new(0, 40, 0, 22)
-radiusValueLabel.Position = UDim2.new(0, 85, 0, 85)
-radiusValueLabel.BackgroundTransparency = 1
-radiusValueLabel.Text = "8"
-radiusValueLabel.TextColor3 = Color3.fromRGB(255,255,255)
-radiusValueLabel.TextSize = 13
-radiusValueLabel.Font = Enum.Font.GothamBold
-radiusValueLabel.TextXAlignment = Enum.TextXAlignment.Center
-radiusValueLabel.Parent = mainFrame
+local rVal = Instance.new("TextLabel")
+rVal.Size = UDim2.new(0,40,0,25)
+rVal.Position = UDim2.new(0,90,0,95)
+rVal.BackgroundTransparency = 1
+rVal.Text = "8.0"
+rVal.TextColor3 = Color3.fromRGB(0,200,255)
+rVal.Font = Enum.Font.GothamBold
+rVal.TextSize = 14
+rVal.Parent = frame
 
--- Thanh trượt (slider)
-local sliderTrack = Instance.new("Frame")
-sliderTrack.Size = UDim2.new(0, 150, 0, 6)
-sliderTrack.Position = UDim2.new(0, 130, 0, 93) -- canh ngang với label
-sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-sliderTrack.BorderSizePixel = 0
-sliderTrack.Parent = mainFrame
+local track = Instance.new("Frame")
+track.Size = UDim2.new(0,140,0,6)
+track.Position = UDim2.new(0,140,0,105)
+track.BackgroundColor3 = Color3.fromRGB(60,60,90)
+track.BorderSizePixel = 0
+track.Parent = frame
 
-local sliderFill = Instance.new("Frame")
-sliderFill.Size = UDim2.new(0.5, 0, 1, 0) -- mặc định 50%
-sliderFill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
-sliderFill.BorderSizePixel = 0
-sliderFill.Parent = sliderTrack
+local fill = Instance.new("Frame")
+fill.Size = UDim2.new(0.5,0,1,0)
+fill.BackgroundColor3 = Color3.fromRGB(0,200,255)
+fill.BorderSizePixel = 0
+fill.Parent = track
 
-local sliderHandle = Instance.new("TextButton")
-sliderHandle.Size = UDim2.new(0, 16, 0, 16)
-sliderHandle.Position = UDim2.new(0.5, -8, 0, -5) -- canh giữa fill
-sliderHandle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-sliderHandle.Text = ""
-sliderHandle.BorderSizePixel = 1
-sliderHandle.BorderColor3 = Color3.fromRGB(0, 150, 200)
-sliderHandle.Parent = sliderTrack
+local handle = Instance.new("TextButton")
+handle.Size = UDim2.new(0,18,0,18)
+handle.Position = UDim2.new(0.5,-9,0,-6)
+handle.BackgroundColor3 = Color3.fromRGB(255,255,255)
+handle.Text = ""
+handle.BorderSizePixel = 1
+handle.BorderColor3 = Color3.fromRGB(0,150,200)
+handle.Parent = track
 
--- Tốc độ (giữ ô nhập)
-local speedLabel = Instance.new("TextLabel")
-speedLabel.Size = UDim2.new(0, 70, 0, 22)
-speedLabel.Position = UDim2.new(0, 10, 0, 125)
-speedLabel.BackgroundTransparency = 1
-speedLabel.Text = "Tốc độ:"
-speedLabel.TextColor3 = Color3.fromRGB(200,200,200)
-speedLabel.TextSize = 13
-speedLabel.Font = Enum.Font.Gotham
-speedLabel.TextXAlignment = Enum.TextXAlignment.Left
-speedLabel.Parent = mainFrame
+-- Ô nhập tốc độ
+local sLabel = Instance.new("TextLabel")
+sLabel.Size = UDim2.new(0,70,0,25)
+sLabel.Position = UDim2.new(0,10,0,135)
+sLabel.BackgroundTransparency = 1
+sLabel.Text = "Tốc độ:"
+sLabel.TextColor3 = Color3.fromRGB(200,200,200)
+sLabel.Font = Enum.Font.Gotham
+sLabel.TextSize = 14
+sLabel.TextXAlignment = Enum.TextXAlignment.Left
+sLabel.Parent = frame
 
-local speedInput = Instance.new("TextBox")
-speedInput.Size = UDim2.new(0, 60, 0, 22)
-speedInput.Position = UDim2.new(0, 85, 0, 125)
-speedInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
-speedInput.Text = "2"
-speedInput.TextColor3 = Color3.fromRGB(255,255,255)
-speedInput.Font = Enum.Font.Gotham
-speedInput.TextSize = 13
-speedInput.Parent = mainFrame
+local sInput = Instance.new("TextBox")
+sInput.Size = UDim2.new(0,60,0,25)
+sInput.Position = UDim2.new(0,90,0,135)
+sInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
+sInput.Text = "2.0"
+sInput.TextColor3 = Color3.new(1,1,1)
+sInput.Font = Enum.Font.Gotham
+sInput.TextSize = 14
+sInput.Parent = frame
 
--- Số lượng (giữ ô nhập)
-local countLabel = Instance.new("TextLabel")
-countLabel.Size = UDim2.new(0, 70, 0, 22)
-countLabel.Position = UDim2.new(0, 10, 0, 155)
-countLabel.BackgroundTransparency = 1
-countLabel.Text = "Số lượng:"
-countLabel.TextColor3 = Color3.fromRGB(200,200,200)
-countLabel.TextSize = 13
-countLabel.Font = Enum.Font.Gotham
-countLabel.TextXAlignment = Enum.TextXAlignment.Left
-countLabel.Parent = mainFrame
+-- Ô nhập số lượng
+local cLabel = Instance.new("TextLabel")
+cLabel.Size = UDim2.new(0,70,0,25)
+cLabel.Position = UDim2.new(0,10,0,170)
+cLabel.BackgroundTransparency = 1
+cLabel.Text = "Số block:"
+cLabel.TextColor3 = Color3.fromRGB(200,200,200)
+cLabel.Font = Enum.Font.Gotham
+cLabel.TextSize = 14
+cLabel.TextXAlignment = Enum.TextXAlignment.Left
+cLabel.Parent = frame
 
-local countInput = Instance.new("TextBox")
-countInput.Size = UDim2.new(0, 60, 0, 22)
-countInput.Position = UDim2.new(0, 85, 0, 155)
-countInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
-countInput.Text = "12"
-countInput.TextColor3 = Color3.fromRGB(255,255,255)
-countInput.Font = Enum.Font.Gotham
-countInput.TextSize = 13
-countInput.Parent = mainFrame
+local cInput = Instance.new("TextBox")
+cInput.Size = UDim2.new(0,60,0,25)
+cInput.Position = UDim2.new(0,90,0,170)
+cInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
+cInput.Text = "12"
+cInput.TextColor3 = Color3.new(1,1,1)
+cInput.Font = Enum.Font.Gotham
+cInput.TextSize = 14
+cInput.Parent = frame
 
-local resetPosBtn = Instance.new("TextButton")
-resetPosBtn.Size = UDim2.new(0, 90, 0, 26)
-resetPosBtn.Position = UDim2.new(0.5, -45, 0, 195)
-resetPosBtn.BackgroundColor3 = Color3.fromRGB(70,70,110)
-resetPosBtn.Text = "Reset vị trí"
-resetPosBtn.TextColor3 = Color3.fromRGB(255,255,255)
-resetPosBtn.Font = Enum.Font.Gotham
-resetPosBtn.TextSize = 12
-resetPosBtn.Parent = mainFrame
-
--- === LOGIC KÉO THẢ MENU ===
-local dragData = { dragging = false, startPos = nil, startMouse = nil }
-titleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragData.dragging = true
-        dragData.startMouse = input.Position
-        dragData.startPos = mainFrame.Position
+-- ========== LOGIC KÉO THẢ ==========
+local drag = {active=false, start=nil, pos=nil}
+title.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        drag.active = true
+        drag.start = i.Position
+        drag.pos = frame.Position
     end
 end)
-titleBar.InputChanged:Connect(function(input)
-    if dragData.dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragData.startMouse
-        mainFrame.Position = UDim2.new(
-            dragData.startPos.X.Scale, dragData.startPos.X.Offset + delta.X,
-            dragData.startPos.Y.Scale, dragData.startPos.Y.Offset + delta.Y
-        )
+title.InputChanged:Connect(function(i)
+    if drag.active and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = i.Position - drag.start
+        frame.Position = UDim2.new(drag.pos.X.Scale, drag.pos.X.Offset + d.X, drag.pos.Y.Scale, drag.pos.Y.Offset + d.Y)
     end
 end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragData.dragging = false
-    end
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then drag.active = false end
 end)
 
--- === THU NHỎ ===
+-- ========== THU NHỎ ==========
 local minimized = false
-toggleMenuBtn.MouseButton1Click:Connect(function()
+minBtn.MouseButton1Click:Connect(function()
     minimized = not minimized
-    mainFrame.Size = minimized and UDim2.new(0, 320, 0, 66) or UDim2.new(0, 320, 0, 260)
-    toggleMenuBtn.Text = minimized and "+" or "-"
-    -- ẩn tất cả thành phần phụ
-    radiusLabel.Visible = not minimized
-    radiusValueLabel.Visible = not minimized
-    sliderTrack.Visible = not minimized
-    speedLabel.Visible = not minimized
-    speedInput.Visible = not minimized
-    countLabel.Visible = not minimized
-    countInput.Visible = not minimized
-    resetPosBtn.Visible = not minimized
-    toggleOrbitBtn.Position = minimized and UDim2.new(0.5, -65, 0, 30) or UDim2.new(0.5, -65, 0, 40)
+    frame.Size = minimized and UDim2.new(0,300,0,70) or UDim2.new(0,300,0,230)
+    minBtn.Text = minimized and "+" or "-"
+    rLabel.Visible = not minimized
+    rVal.Visible = not minimized
+    track.Visible = not minimized
+    sLabel.Visible = not minimized
+    sInput.Visible = not minimized
+    cLabel.Visible = not minimized
+    cInput.Visible = not minimized
+    toggleBtn.Position = minimized and UDim2.new(0.5,-70,0,32) or UDim2.new(0.5,-70,0,45)
 end)
 
--- === LOGIC THANH TRƯỢT ===
-local minRadius = 2
-local maxRadius = 30
-local currentRadius = 8
+-- ========== THANH TRƯỢT ==========
+local minR, maxR, currentR = 1, 30, 8
 
-local function updateSlider(value)
-    local clamped = math.clamp(value, minRadius, maxRadius)
-    currentRadius = clamped
-    radiusValueLabel.Text = tostring(math.round(clamped * 10) / 10) -- làm tròn 1 chữ số
-    -- Cập nhật fill và handle
-    local percent = (clamped - minRadius) / (maxRadius - minRadius)
-    sliderFill.Size = UDim2.new(percent, 0, 1, 0)
-    sliderHandle.Position = UDim2.new(percent, -8, 0, -5)
-    -- Gửi lên server nếu đang bật
-    if toggleOrbitBtn.Text == "TẮT ORBIT" then
-        sendOrbitState()
-    end
+local function setRadius(val)
+    local clamped = math.clamp(val, minR, maxR)
+    currentR = clamped
+    rVal.Text = string.format("%.1f", clamped)
+    local pct = (clamped - minR) / (maxR - minR)
+    fill.Size = UDim2.new(pct, 0, 1, 0)
+    handle.Position = UDim2.new(pct, -9, 0, -6)
+    if toggleBtn.Text == "TẮT ORBIT" then sendState() end
 end
 
-local function getSliderValueFromMouse(mouseX)
-    local trackPos = sliderTrack.AbsolutePosition.X
-    local trackSize = sliderTrack.AbsoluteSize.X
-    local relative = (mouseX - trackPos) / trackSize
-    return minRadius + relative * (maxRadius - minRadius)
+local function getValFromMouse(x)
+    local abs = track.AbsolutePosition.X
+    local size = track.AbsoluteSize.X
+    return minR + ((x - abs) / size) * (maxR - minR)
 end
 
-local isDraggingSlider = false
-
-sliderHandle.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isDraggingSlider = true
-        local mousePos = input.Position
-        local val = getSliderValueFromMouse(mousePos.X)
-        updateSlider(val)
+local sliding = false
+handle.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliding = true
+        setRadius(getValFromMouse(i.Position.X))
+    end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if sliding and i.UserInputType == Enum.UserInputType.MouseMovement then
+        setRadius(getValFromMouse(i.Position.X))
+    end
+end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
+end)
+track.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        setRadius(getValFromMouse(i.Position.X))
     end
 end)
 
-UserInputService.InputChanged:Connect(function(input)
-    if isDraggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local val = getSliderValueFromMouse(input.Position.X)
-        updateSlider(val)
-    end
-end)
+setRadius(8)
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isDraggingSlider = false
-    end
-end)
-
--- Cũng cho phép click trên track để nhảy
-sliderTrack.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        local val = getSliderValueFromMouse(input.Position.X)
-        updateSlider(val)
-    end
-end)
-
--- === GỬI LỆNH ===
-local function sendOrbitState()
+-- ========== GỬI LỆNH ==========
+local function sendState()
     local data = {
-        enabled = (toggleOrbitBtn.Text == "TẮT ORBIT"),
-        radius = currentRadius,
-        speed = tonumber(speedInput.Text) or 2,
-        count = math.floor(tonumber(countInput.Text) or 12)
+        enabled = (toggleBtn.Text == "TẮT ORBIT"),
+        radius = currentR,
+        speed = tonumber(sInput.Text) or 2,
+        count = math.floor(tonumber(cInput.Text) or 12)
     }
     remote:FireServer(data)
 end
 
-local function toggleOrbit()
-    local isOn = toggleOrbitBtn.Text == "BẬT ORBIT"
-    toggleOrbitBtn.Text = isOn and "TẮT ORBIT" or "BẬT ORBIT"
-    toggleOrbitBtn.BackgroundColor3 = isOn and Color3.fromRGB(200, 50, 50) or Color3.fromRGB(0, 180, 80)
-    sendOrbitState()
-end
-
-toggleOrbitBtn.MouseButton1Click:Connect(toggleOrbit)
-
--- Gửi khi thay đổi thông số khác
-local function onParamChange()
-    if toggleOrbitBtn.Text == "TẮT ORBIT" then
-        sendOrbitState()
-    end
-end
-speedInput.FocusLost:Connect(onParamChange)
-countInput.FocusLost:Connect(onParamChange)
-
-resetPosBtn.MouseButton1Click:Connect(function()
-    mainFrame.Position = UDim2.new(0, 50, 0, 50)
+toggleBtn.MouseButton1Click:Connect(function()
+    local on = toggleBtn.Text == "BẬT ORBIT"
+    toggleBtn.Text = on and "TẮT ORBIT" or "BẬT ORBIT"
+    toggleBtn.BackgroundColor3 = on and Color3.fromRGB(200,50,50) or Color3.fromRGB(0,180,80)
+    sendState()
 end)
 
--- Khởi tạo slider về mặc định
-updateSlider(8)
+sInput.FocusLost:Connect(function(e) if e then sendState() end end)
+cInput.FocusLost:Connect(function(e) if e then sendState() end end)
 
--- Khởi tạo trạng thái tắt
+-- Gửi trạng thái tắt ban đầu
 task.wait(1)
 remote:FireServer({ enabled = false })
