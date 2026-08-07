@@ -1,254 +1,130 @@
--- ========== CLIENT: GỬI LỆNH LÊN SERVER ==========
+-- Axiom | Delta Client-Side Lag Fix
+-- CHẠY TRỰC TIẾP TRÊN DELTA / EXECUTOR - KHÔNG CẦN STUDIO
+-- Đúng chuẩn Lua Roblox, không phụ thuộc bên thứ ba
+
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
+local Debris = game:GetService("Debris")
 
-local player = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer
+local lastFullClean = 0
 
--- Tạo RemoteEvent nếu chưa có
-local remote = Instance.new("RemoteEvent")
-remote.Name = "OrbitControl"
-remote.Parent = ReplicatedStorage
+-- Cấu hình khóa chặt yêu cầu
+local CONFIG = {
+    KeepOnlyBaseColor = true,       -- Chỉ giữ màu gốc, không hiệu ứng màu đổi/chói
+    StripAllVisualTrash = true,     -- Xóa lửa, tia sáng, nổ, hạt, ánh sáng
+    GutHeavyParts = true,           -- Bỏ ruột khối nặng, chỉ giữ hình khối + màu
+    KillUnusedLogic = true,         -- Dọn script thừa làm giật
+    AutoCleanInterval = 4           -- Tự dọn định kỳ không gây tải
+}
 
--- Tạo GUI điều khiển
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "OrbitUI"
-screenGui.Parent = player:WaitForChild("PlayerGui")
+-- Tối ưu ánh sáng toàn cục ngay lập tức
+do
+    Lighting.Ambient = Color3.new(0.65, 0.65, 0.65)
+    Lighting.OutdoorAmbient = Color3.new(0.75, 0.75, 0.75)
+    Lighting.Brightness = 1
+    Lighting.ShadowSoftness = 0
+    Lighting.EnvironmentSpecularScale = 0
+    Lighting.ColorShift_Top = Color3.new(1,1,1)
+    Lighting.ColorShift_Bottom = Color3.new(1,1,1)
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 230)
-frame.Position = UDim2.new(0, 30, 0, 30)
-frame.BackgroundColor3 = Color3.fromRGB(20,20,35)
-frame.BackgroundTransparency = 0.2
-frame.BorderSizePixel = 2
-frame.BorderColor3 = Color3.fromRGB(255,200,50)
-frame.Parent = screenGui
-
--- Thanh tiêu đề kéo thả
-local title = Instance.new("Frame")
-title.Size = UDim2.new(1,0,0,30)
-title.BackgroundColor3 = Color3.fromRGB(200,150,0)
-title.BackgroundTransparency = 0.3
-title.Parent = frame
-
-local titleText = Instance.new("TextLabel")
-titleText.Size = UDim2.new(1,-30,1,0)
-titleText.Position = UDim2.new(0,5,0,0)
-titleText.BackgroundTransparency = 1
-titleText.Text = "ORBIT SERVER v2.0"
-titleText.TextColor3 = Color3.new(1,1,1)
-titleText.Font = Enum.Font.GothamBold
-titleText.TextSize = 16
-titleText.TextXAlignment = Enum.TextXAlignment.Left
-titleText.Parent = title
-
-local minBtn = Instance.new("TextButton")
-minBtn.Size = UDim2.new(0,24,0,24)
-minBtn.Position = UDim2.new(1,-28,0,3)
-minBtn.BackgroundColor3 = Color3.fromRGB(200,40,40)
-minBtn.Text = "-"
-minBtn.TextColor3 = Color3.new(1,1,1)
-minBtn.Font = Enum.Font.GothamBold
-minBtn.TextSize = 18
-minBtn.Parent = title
-
--- Nút bật/tắt
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0,140,0,36)
-toggleBtn.Position = UDim2.new(0.5,-70,0,45)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(0,180,80)
-toggleBtn.Text = "BẬT ORBIT"
-toggleBtn.TextColor3 = Color3.new(1,1,1)
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.TextSize = 16
-toggleBtn.Parent = frame
-
--- Thanh trượt bán kính
-local rLabel = Instance.new("TextLabel")
-rLabel.Size = UDim2.new(0,80,0,25)
-rLabel.Position = UDim2.new(0,10,0,95)
-rLabel.BackgroundTransparency = 1
-rLabel.Text = "Khoảng cách:"
-rLabel.TextColor3 = Color3.fromRGB(200,200,200)
-rLabel.Font = Enum.Font.Gotham
-rLabel.TextSize = 14
-rLabel.TextXAlignment = Enum.TextXAlignment.Left
-rLabel.Parent = frame
-
-local rVal = Instance.new("TextLabel")
-rVal.Size = UDim2.new(0,40,0,25)
-rVal.Position = UDim2.new(0,90,0,95)
-rVal.BackgroundTransparency = 1
-rVal.Text = "8.0"
-rVal.TextColor3 = Color3.fromRGB(0,200,255)
-rVal.Font = Enum.Font.GothamBold
-rVal.TextSize = 14
-rVal.Parent = frame
-
-local track = Instance.new("Frame")
-track.Size = UDim2.new(0,140,0,6)
-track.Position = UDim2.new(0,140,0,105)
-track.BackgroundColor3 = Color3.fromRGB(60,60,90)
-track.BorderSizePixel = 0
-track.Parent = frame
-
-local fill = Instance.new("Frame")
-fill.Size = UDim2.new(0.5,0,1,0)
-fill.BackgroundColor3 = Color3.fromRGB(0,200,255)
-fill.BorderSizePixel = 0
-fill.Parent = track
-
-local handle = Instance.new("TextButton")
-handle.Size = UDim2.new(0,18,0,18)
-handle.Position = UDim2.new(0.5,-9,0,-6)
-handle.BackgroundColor3 = Color3.fromRGB(255,255,255)
-handle.Text = ""
-handle.BorderSizePixel = 1
-handle.BorderColor3 = Color3.fromRGB(0,150,200)
-handle.Parent = track
-
--- Ô nhập tốc độ
-local sLabel = Instance.new("TextLabel")
-sLabel.Size = UDim2.new(0,70,0,25)
-sLabel.Position = UDim2.new(0,10,0,135)
-sLabel.BackgroundTransparency = 1
-sLabel.Text = "Tốc độ:"
-sLabel.TextColor3 = Color3.fromRGB(200,200,200)
-sLabel.Font = Enum.Font.Gotham
-sLabel.TextSize = 14
-sLabel.TextXAlignment = Enum.TextXAlignment.Left
-sLabel.Parent = frame
-
-local sInput = Instance.new("TextBox")
-sInput.Size = UDim2.new(0,60,0,25)
-sInput.Position = UDim2.new(0,90,0,135)
-sInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
-sInput.Text = "2.0"
-sInput.TextColor3 = Color3.new(1,1,1)
-sInput.Font = Enum.Font.Gotham
-sInput.TextSize = 14
-sInput.Parent = frame
-
--- Ô nhập số lượng
-local cLabel = Instance.new("TextLabel")
-cLabel.Size = UDim2.new(0,70,0,25)
-cLabel.Position = UDim2.new(0,10,0,170)
-cLabel.BackgroundTransparency = 1
-cLabel.Text = "Số block:"
-cLabel.TextColor3 = Color3.fromRGB(200,200,200)
-cLabel.Font = Enum.Font.Gotham
-cLabel.TextSize = 14
-cLabel.TextXAlignment = Enum.TextXAlignment.Left
-cLabel.Parent = frame
-
-local cInput = Instance.new("TextBox")
-cInput.Size = UDim2.new(0,60,0,25)
-cInput.Position = UDim2.new(0,90,0,170)
-cInput.BackgroundColor3 = Color3.fromRGB(40,40,55)
-cInput.Text = "12"
-cInput.TextColor3 = Color3.new(1,1,1)
-cInput.Font = Enum.Font.Gotham
-cInput.TextSize = 14
-cInput.Parent = frame
-
--- ========== LOGIC KÉO THẢ ==========
-local drag = {active=false, start=nil, pos=nil}
-title.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        drag.active = true
-        drag.start = i.Position
-        drag.pos = frame.Position
+    -- Xóa sạch hiệu ứng ánh sáng nặng
+    for _, fx in pairs(Lighting:GetChildren()) do
+        if fx:IsA("BloomEffect") or fx:IsA("SunRaysEffect") or fx:IsA("DepthOfFieldEffect") 
+        or fx:IsA("ColorCorrectionEffect") or fx:IsA("BlurEffect") or fx:IsA("GrainEffect") then
+            fx:Destroy()
+        end
     end
-end)
-title.InputChanged:Connect(function(i)
-    if drag.active and i.UserInputType == Enum.UserInputType.MouseMovement then
-        local d = i.Position - drag.start
-        frame.Position = UDim2.new(drag.pos.X.Scale, drag.pos.X.Offset + d.X, drag.pos.Y.Scale, drag.pos.Y.Offset + d.Y)
-    end
-end)
-UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then drag.active = false end
-end)
-
--- ========== THU NHỎ ==========
-local minimized = false
-minBtn.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    frame.Size = minimized and UDim2.new(0,300,0,70) or UDim2.new(0,300,0,230)
-    minBtn.Text = minimized and "+" or "-"
-    rLabel.Visible = not minimized
-    rVal.Visible = not minimized
-    track.Visible = not minimized
-    sLabel.Visible = not minimized
-    sInput.Visible = not minimized
-    cLabel.Visible = not minimized
-    cInput.Visible = not minimized
-    toggleBtn.Position = minimized and UDim2.new(0.5,-70,0,32) or UDim2.new(0.5,-70,0,45)
-end)
-
--- ========== THANH TRƯỢT ==========
-local minR, maxR, currentR = 1, 30, 8
-
-local function setRadius(val)
-    local clamped = math.clamp(val, minR, maxR)
-    currentR = clamped
-    rVal.Text = string.format("%.1f", clamped)
-    local pct = (clamped - minR) / (maxR - minR)
-    fill.Size = UDim2.new(pct, 0, 1, 0)
-    handle.Position = UDim2.new(pct, -9, 0, -6)
-    if toggleBtn.Text == "TẮT ORBIT" then sendState() end
 end
 
-local function getValFromMouse(x)
-    local abs = track.AbsolutePosition.X
-    local size = track.AbsoluteSize.X
-    return minR + ((x - abs) / size) * (maxR - minR)
+-- Hàm xử lý chính - chạy nhanh, không chặn luồng
+local function OptimizeItem(item)
+    if not item or not item:IsDescendantOf(game) then return end
+    if item:IsDescendantOf(LocalPlayer.Character or LocalPlayer) then return end
+
+    -- Xóa sạch mọi hiệu ứng hình ảnh nặng
+    if CONFIG.StripAllVisualTrash then
+        if item:IsA("ParticleEmitter") or item:IsA("Fire") or item:IsA("Smoke") 
+        or item:IsA("Sparkles") or item:IsA("PointLight") or item:IsA("SpotLight")
+        or item:IsA("Trail") or item:IsA("Explosion") or item:IsA("ForceField") then
+            item:Destroy()
+            return
+        end
+    end
+
+    -- Xử lý khối vật lý - bỏ ruột, giữ màu nhận biết
+    if item:IsA("BasePart") then
+        local savedColor = item.Color -- Lưu lại màu gốc trước khi chỉnh
+
+        if CONFIG.GutHeavyParts then
+            item.Material = Enum.Material.SmoothPlastic
+            item.CastShadow = false
+            item.Reflectance = 0
+            item.CustomPhysicalProperties = PhysicalProperties.new(1, 0, 0)
+            
+            -- Xóa hết đồ trang trí ruột khối
+            for _, child in pairs(item:GetChildren()) do
+                if child:IsA("SpecialMesh") or child:IsA("Decal") or child:IsA("Texture") 
+                or child:IsA("Motor6D") or child:IsA("Weld") and not item:IsDescendantOf(LocalPlayer.Character) then
+                    child:Destroy()
+                end
+            end
+        end
+
+        -- Khóa màu gốc, xóa mọi logic đổi màu
+        if CONFIG.KeepOnlyBaseColor then
+            item.Color = savedColor
+            item.BrickColor = BrickColor.new(savedColor)
+            for _, scr in pairs(item:GetChildren()) do
+                if scr:IsA("Script") or scr:IsA("LocalScript") or scr:IsA("ValueBase") then
+                    local n = scr.Name:lower()
+                    if n:find("color") or n:find("fade") or n:find("glow") or n:find("flash") then
+                        scr:Destroy()
+                    end
+                end
+            end
+        end
+    end
+
+    -- Xóa script/đối tượng thừa gây tải
+    if CONFIG.KillUnusedLogic then
+        if item:IsA("Script") or item:IsA("LocalScript") then
+            local n = item.Name:lower()
+            if n:find("effect") or n:find("visual") or n:find("animate") or n:find("particle") then
+                Debris:AddItem(item, 0)
+            end
+        end
+    end
 end
 
-local sliding = false
-handle.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        sliding = true
-        setRadius(getValFromMouse(i.Position.X))
+-- Quét toàn bộ hệ thống
+local function FullSystemClean()
+    for _, desc in pairs(Workspace:GetDescendants()) do
+        task.spawn(OptimizeItem, desc)
     end
-end)
-UserInputService.InputChanged:Connect(function(i)
-    if sliding and i.UserInputType == Enum.UserInputType.MouseMovement then
-        setRadius(getValFromMouse(i.Position.X))
+    for _, desc in pairs(ReplicatedStorage:GetDescendants()) do
+        if desc:IsA("ParticleEmitter") or desc:IsA("Fire") then desc:Destroy() end
     end
-end)
-UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then sliding = false end
-end)
-track.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        setRadius(getValFromMouse(i.Position.X))
-    end
-end)
-
-setRadius(8)
-
--- ========== GỬI LỆNH ==========
-local function sendState()
-    local data = {
-        enabled = (toggleBtn.Text == "TẮT ORBIT"),
-        radius = currentR,
-        speed = tonumber(sInput.Text) or 2,
-        count = math.floor(tonumber(cInput.Text) or 12)
-    }
-    remote:FireServer(data)
 end
 
-toggleBtn.MouseButton1Click:Connect(function()
-    local on = toggleBtn.Text == "BẬT ORBIT"
-    toggleBtn.Text = on and "TẮT ORBIT" or "BẬT ORBIT"
-    toggleBtn.BackgroundColor3 = on and Color3.fromRGB(200,50,50) or Color3.fromRGB(0,180,80)
-    sendState()
+-- Chạy ngay khi khởi động
+FullSystemClean()
+
+-- Bắt đối tượng mới xuất hiện để tối ưu ngay
+Workspace.DescendantAdded:Connect(function(item)
+    task.delay(0, OptimizeItem, item)
 end)
 
-sInput.FocusLost:Connect(function(e) if e then sendState() end end)
-cInput.FocusLost:Connect(function(e) if e then sendState() end end)
+-- Tự dọn định kỳ không gây giật
+RunService.Heartbeat:Connect(function()
+    local now = os.clock()
+    if now - lastFullClean >= CONFIG.AutoCleanInterval then
+        lastFullClean = now
+        task.spawn(FullSystemClean)
+    end
+end)
 
--- Gửi trạng thái tắt ban đầu
-task.wait(1)
-remote:FireServer({ enabled = false })
+print("✅ HOÀN TẤT - Đã tối ưu xong ông chủ! Chạy ngon trên Delta, không cần Studio gì cả. FPS bay luôn!")
