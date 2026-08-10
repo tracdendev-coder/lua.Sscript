@@ -1,14 +1,11 @@
 --[[
-    MÃ NGUỒN: TỰ ĐỘNG CHUYỂN ĐỔI DECAL ID SANG ASSET ID & PRELOAD ẢNH
-    HƯỚNG DẪN DÁN: Thay thế toàn bộ mã nguồn cũ trong 'LocalScript'.
-    SỬA ĐỔI CHÍNH: 
-    - Nhận diện lý do ảnh bị tệp trắng/trong suốt: ID `99681486984720` là Decal ID (trang web), không phải Asset Texture ID thực tế khi render.
-    - Dùng `MarketplaceService:GetProductInfo()` để tự động lấy đúng Asset ID ảnh gốc từ Roblox Server.
-    - Dùng `ContentProvider:PreloadAsync()` để ép game tải xong hình ảnh trước khi hiển thị nút.
+    MÃ NGUỒN: BỎ HIỆU ỨNG ĐEN MÀN HÌNH + THÊM PHÍM TẮT (G) CHO CẢ PC VÀ MOBILE
+    HƯỚNG DẪN: Dùng trực tiếp qua Loadstring hoặc dán vào LocalScript.
 --]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ContentProvider = game:GetService("ContentProvider")
 local LocalPlayer = Players.LocalPlayer
@@ -43,7 +40,6 @@ task.spawn(function()
     end
     
     MainButton.Image = finalImageId
-    -- Ép tải tài nguyên ảnh vào bộ nhớ đệm
     pcall(function()
         ContentProvider:PreloadAsync({MainButton})
     end)
@@ -90,14 +86,13 @@ CountdownLabel.ZIndex = 4
 CountdownLabel.Parent = StatusCircle
 
 -------------------------------------------------------------------------
--- LOGIC XỬ LÝ ĐÔNG CỨNG VÀ ĐẾM NGƯỢC
+-- LOGIC XỬ LÝ ĐÔNG CỨNG VÀ ĐẾM NGƯỢC (ĐÃ LOẠI BỎ HIỆU ỨNG MÀN HÌNH)
 -------------------------------------------------------------------------
 
 local FREEZE_DURATION = 5.0
 local isActive = false
 local snapshots = {}
 local renderConnection = nil
-local colorCorrection = nil
 local startTime = 0
 
 local function takeSnapshots()
@@ -119,11 +114,6 @@ local function stopVisualFreeze()
     if renderConnection then
         renderConnection:Disconnect()
         renderConnection = nil
-    end
-    
-    if colorCorrection then
-        colorCorrection:Destroy()
-        colorCorrection = nil
     end
     
     for player, _ in pairs(snapshots) do
@@ -154,10 +144,7 @@ local function startVisualFreeze()
     
     takeSnapshots()
     
-    colorCorrection = Instance.new("ColorCorrectionEffect")
-    colorCorrection.Saturation = -0.5
-    colorCorrection.TintColor = Color3.fromRGB(150, 180, 200)
-    colorCorrection.Parent = game.Workspace.CurrentCamera
+    -- Đã gỡ bỏ hoàn toàn hiệu ứng ColorCorrectionEffect (làm đen/đổi màu màn hình)
     
     renderConnection = RunService.RenderStepped:Connect(function()
         local elapsedTime = os.clock() - startTime
@@ -188,10 +175,21 @@ local function startVisualFreeze()
     end)
 end
 
-MainButton.MouseButton1Click:Connect(function()
+-- Hàm chuyển đổi trạng thái chung cho cả nút bấm và phím G
+local function toggleFreeze()
     if isActive then
         stopVisualFreeze()
     else
         startVisualFreeze()
+    end
+end
+
+-- Kích hoạt bằng cách bấm vào nút tròn trên giao diện
+MainButton.MouseButton1Click:Connect(toggleFreeze)
+
+-- Kích hoạt bằng cách bấm phím 'G' trên bàn phím PC (Bỏ qua khi đang chat)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.G then
+        toggleFreeze()
     end
 end)
