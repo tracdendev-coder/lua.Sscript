@@ -1,11 +1,17 @@
 -- ============================================================================
--- BLOX FRUITS COLOR & VISUAL CUSTOMIZER (INCLUDES FAKE BELI & LEVEL)
+-- BLOX FRUITS COLOR & FIXED FAKE UI ENGINE (PERSISTENT DISPLAY)
 -- ============================================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
+
+-- Real-time UI Lock State
+local FakeValues = {
+    Beli = nil,
+    Level = nil
+}
 
 -- Global State Configuration
 local ColorConfig = {
@@ -113,7 +119,7 @@ TopBar.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -90, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
-TitleLabel.Text = "MENU ĐỔI MÀU & HIỂN THỊ"
+TitleLabel.Text = "MENU ĐỔI MÀU & FAKE LEVEL/BELI"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.SourceSansBold
@@ -180,7 +186,6 @@ local function CreateSectionHeader(title)
     Corner.Parent = Header
 end
 
--- Function tạo ô nhập liệu
 local function CreateInputField(placeholderText, onFocusLostCallback)
     local Frame = Instance.new("Frame")
     Frame.Size = UDim2.new(1, 0, 0, 40)
@@ -212,38 +217,43 @@ local function CreateInputField(placeholderText, onFocusLostCallback)
 end
 
 -- ============================================================================
--- FEATURE: FAKE LEVEL & BELI LOGIC
+-- FIXED FAKE LEVEL & BELI ENGINE (LOCKED IN RENDERSTEPPED)
 -- ============================================================================
-CreateSectionHeader("TÙY CHỈNH HIỂN THỊ (VISUAL ONLY)")
-
-local function UpdateBeliUI(customBeli)
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if playerGui then
-        for _, gui in ipairs(playerGui:GetDescendants()) do
-            if gui:IsA("TextLabel") and (gui.Name:lower():find("beli") or gui.Text:find("%$")) then
-                gui.Text = "$" .. customBeli
-            end
-        end
-    end
-end
-
-local function UpdateLevelUI(customLevel)
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if playerGui then
-        for _, gui in ipairs(playerGui:GetDescendants()) do
-            if gui:IsA("TextLabel") and (gui.Name:lower():find("level") or gui.Text:lower():find("cấp")) then
-                gui.Text = "Cấp " .. customLevel
-            end
-        end
-    end
-end
+CreateSectionHeader("TÙY CHỈNH HIỂN THỊ (PERSISTENT UI)")
 
 CreateInputField("Nhập số Beli ảo...", function(value)
-    UpdateBeliUI(value)
+    FakeValues.Beli = value
 end)
 
 CreateInputField("Nhập Cấp độ (Level) ảo...", function(value)
-    UpdateLevelUI(value)
+    FakeValues.Level = value
+end)
+
+-- Vòng lặp khóa giá trị UI liên tục, tránh bị game cập nhật đè lại
+RunService.RenderStepped:Connect(function()
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+
+    local mainHud = playerGui:FindFirstChild("Main") or playerGui:FindFirstChild("HUD")
+    if not mainHud then return end
+
+    -- Khóa giá trị Beli
+    if FakeValues.Beli then
+        for _, obj in ipairs(mainHud:GetDescendants()) do
+            if obj:IsA("TextLabel") and (obj.Name == "Money" or obj.Name == "Beli" or obj.Text:find("%$")) then
+                obj.Text = "$" .. FakeValues.Beli
+            end
+        end
+    end
+
+    -- Khóa giá trị Level (Lọc chính xác frame Level, bỏ qua Skill/Mastery)
+    if FakeValues.Level then
+        for _, obj in ipairs(mainHud:GetDescendants()) do
+            if obj:IsA("TextLabel") and obj.Name == "Level" then
+                obj.Text = "Cấp " .. FakeValues.Level
+            end
+        end
+    end
 end)
 
 -- ============================================================================
