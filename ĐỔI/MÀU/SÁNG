@@ -1,14 +1,13 @@
 -- ============================================================================
--- BLOX FRUITS EFFECT COLOR CUSTOMIZER ENGINE (OPTIMIZED FOR 60 FPS)
+-- BLOX FRUITS COLOR & VISUAL CUSTOMIZER (INCLUDES FAKE BELI & LEVEL)
 -- ============================================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Global state configuration
+-- Global State Configuration
 local ColorConfig = {
     Enabled = false,
     CurrentMode = "Red",
@@ -27,14 +26,13 @@ local ColorPalette = {
     ["Trắng"] = Color3.fromRGB(255, 255, 255)
 }
 
--- Target Cache System (Tối ưu hóa tránh giật lag)
+-- Target Cache System
 local CachedObjects = {}
 
 local function IsValidTarget(descendant)
     if not (descendant:IsA("ParticleEmitter") or descendant:IsA("Light")) then 
         return false 
     end
-    -- Bỏ qua hiệu ứng gắn trên người chơi
     for _, player in ipairs(Players:GetPlayers()) do
         if player.Character and descendant:IsDescendantOf(player.Character) then
             return false
@@ -49,7 +47,6 @@ local function RegisterObject(obj)
     end
 end
 
--- Quét ban đầu và tự động cập nhật khi có skill/hiệu ứng mới xuất hiện
 local function RefreshCache()
     table.clear(CachedObjects)
     for _, obj in ipairs(workspace:GetDescendants()) do
@@ -72,7 +69,7 @@ local function ApplyColor(targetColor)
                 obj.Color = targetColor
             end
         else
-            CachedObjects[obj] = nil -- Xóa các object đã bị hủy
+            CachedObjects[obj] = nil
         end
     end
 end
@@ -93,8 +90,8 @@ end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 360, 0, 420)
-MainFrame.Position = UDim2.new(0.5, -180, 0.4, -210)
+MainFrame.Size = UDim2.new(0, 360, 0, 480)
+MainFrame.Position = UDim2.new(0.5, -180, 0.4, -240)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
@@ -116,7 +113,7 @@ TopBar.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -90, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
-TitleLabel.Text = "MENU ĐỔI MÀU HIỆU ỨNG (OPTIMIZED)"
+TitleLabel.Text = "MENU ĐỔI MÀU & HIỂN THỊ"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 14
 TitleLabel.Font = Enum.Font.SourceSansBold
@@ -157,7 +154,7 @@ ScrollContainer.Size = UDim2.new(1, -20, 1, -55)
 ScrollContainer.Position = UDim2.new(0, 10, 0, 48)
 ScrollContainer.BackgroundTransparency = 1
 ScrollContainer.BorderSizePixel = 0
-ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 550)
+ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 680)
 ScrollContainer.ScrollBarThickness = 6
 ScrollContainer.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100)
 ScrollContainer.Parent = MainFrame
@@ -182,6 +179,77 @@ local function CreateSectionHeader(title)
     Corner.CornerRadius = UDim.new(0, 4)
     Corner.Parent = Header
 end
+
+-- Function tạo ô nhập liệu
+local function CreateInputField(placeholderText, onFocusLostCallback)
+    local Frame = Instance.new("Frame")
+    Frame.Size = UDim2.new(1, 0, 0, 40)
+    Frame.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
+    Frame.Parent = ScrollContainer
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 6)
+    Corner.Parent = Frame
+
+    local TextBox = Instance.new("TextBox")
+    TextBox.Size = UDim2.new(1, -20, 1, 0)
+    TextBox.Position = UDim2.new(0, 10, 0, 0)
+    TextBox.BackgroundTransparency = 1
+    TextBox.PlaceholderText = placeholderText
+    TextBox.Text = ""
+    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextBox.PlaceholderColor3 = Color3.fromRGB(140, 140, 160)
+    TextBox.TextSize = 13
+    TextBox.Font = Enum.Font.SourceSans
+    TextBox.TextXAlignment = Enum.TextXAlignment.Left
+    TextBox.Parent = Frame
+
+    TextBox.FocusLost:Connect(function(enterPressed)
+        if enterPressed and TextBox.Text ~= "" then
+            onFocusLostCallback(TextBox.Text)
+        end
+    end)
+end
+
+-- ============================================================================
+-- FEATURE: FAKE LEVEL & BELI LOGIC
+-- ============================================================================
+CreateSectionHeader("TÙY CHỈNH HIỂN THỊ (VISUAL ONLY)")
+
+local function UpdateBeliUI(customBeli)
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, gui in ipairs(playerGui:GetDescendants()) do
+            if gui:IsA("TextLabel") and (gui.Name:lower():find("beli") or gui.Text:find("%$")) then
+                gui.Text = "$" .. customBeli
+            end
+        end
+    end
+end
+
+local function UpdateLevelUI(customLevel)
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, gui in ipairs(playerGui:GetDescendants()) do
+            if gui:IsA("TextLabel") and (gui.Name:lower():find("level") or gui.Text:lower():find("cấp")) then
+                gui.Text = "Cấp " .. customLevel
+            end
+        end
+    end
+end
+
+CreateInputField("Nhập số Beli ảo...", function(value)
+    UpdateBeliUI(value)
+end)
+
+CreateInputField("Nhập Cấp độ (Level) ảo...", function(value)
+    UpdateLevelUI(value)
+end)
+
+-- ============================================================================
+-- COLOR ENGINE CONTROLS
+-- ============================================================================
+CreateSectionHeader("BẬT/TẮT ĐỔI MÀU")
 
 local ToggleFrame = Instance.new("Frame")
 ToggleFrame.Size = UDim2.new(1, 0, 0, 40)
@@ -291,10 +359,7 @@ RainbowBtn.MouseButton1Click:Connect(function()
     SelectColor("Rainbow", Color3.fromRGB(255, 255, 255), RainbowBtn)
 end)
 
--- ============================================================================
--- MAIN LOOP OPTIMIZATION (ĐÃ BỎ WORKSPACE DETECT TRONG RENDERSTEPPED)
--- ============================================================================
-
+-- Main Loop Optimization
 local hue = 0
 RunService.RenderStepped:Connect(function(dt)
     if not ColorConfig.Enabled then return end
@@ -305,7 +370,6 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- Vòng lặp phụ áp dụng màu thường (Giảm tải CPU hoàn toàn)
 task.spawn(function()
     while true do
         task.wait(0.2)
@@ -315,11 +379,11 @@ task.spawn(function()
     end
 end)
 
--- Controls
+-- Window Controls
 local isMinimized = false
 ToggleSizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
-    MainFrame:TweenSize(UDim2.new(0, 360, 0, isMinimized and 40 or 420), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.2, true)
+    MainFrame:TweenSize(UDim2.new(0, 360, 0, isMinimized and 40 or 480), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.2, true)
     ScrollContainer.Visible = not isMinimized
     ToggleSizeBtn.Text = isMinimized and "+" or "-"
 end)
