@@ -1,0 +1,345 @@
+-- ============================================================================
+-- BLOX FRUITS EFFECT COLOR CUSTOMIZER ENGINE (LOCAL CLIENT ONLY)
+-- ============================================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Global state configuration
+local ColorConfig = {
+    Enabled = false,
+    CurrentMode = "Red", -- "Red", "Pink", "Rainbow", etc.
+    SelectedColor = Color3.fromRGB(255, 0, 0),
+    RainbowSpeed = 1.0,
+    TargetTypes = {
+        Particles = true,
+        Dust = true,
+        Visuals = true
+    }
+}
+
+local ColorPalette = {
+    ["Đỏ"] = Color3.fromRGB(255, 0, 0),
+    ["Hồng"] = Color3.fromRGB(255, 105, 180),
+    ["Xanh Dương"] = Color3.fromRGB(0, 150, 255),
+    ["Xanh Lá"] = Color3.fromRGB(0, 255, 100),
+    ["Vàng"] = Color3.fromRGB(255, 215, 0),
+    ["Tím"] = Color3.fromRGB(150, 0, 255),
+    ["Cam"] = Color3.fromRGB(255, 140, 0),
+    ["Trắng"] = Color3.fromRGB(255, 255, 255)
+}
+
+-- ============================================================================
+-- GUI INTERFACE SETUP (VIETNAMESE MENU WITH RESIZE & SCROLL)
+-- ============================================================================
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "BloxFruitsColorMenu"
+ScreenGui.ResetOnSpawn = false
+
+-- Prevent UI dupe
+if LocalPlayer:FindFirstChild("PlayerGui") then
+    local oldUI = LocalPlayer.PlayerGui:FindFirstChild("ScreenGui")
+    if oldUI then oldUI:Destroy() end
+    ScreenGui.Parent = LocalPlayer.PlayerGui
+end
+
+-- Main Window Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 360, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -180, 0.4, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local MainUICorner = Instance.new("UICorner")
+MainUICorner.CornerRadius = UDim.new(0, 10)
+MainUICorner.Parent = MainFrame
+
+-- Top Bar Header
+local TopBar = Instance.new("Frame")
+TopBar.Name = "TopBar"
+TopBar.Size = UDim2.new(1, 0, 0, 40)
+TopBar.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -90, 1, 0)
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+TitleLabel.Text = "MENU ĐỔI MÀU HIỆU ỨNG"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = 15
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Parent = TopBar
+
+-- Minimize/Maximize Button
+local ToggleSizeBtn = Instance.new("TextButton")
+ToggleSizeBtn.Name = "ToggleSizeBtn"
+ToggleSizeBtn.Size = UDim2.new(0, 30, 0, 30)
+ToggleSizeBtn.Position = UDim2.new(1, -70, 0, 5)
+ToggleSizeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+ToggleSizeBtn.Text = "-"
+ToggleSizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleSizeBtn.TextSize = 18
+ToggleSizeBtn.Font = Enum.Font.SourceSansBold
+ToggleSizeBtn.Parent = TopBar
+
+local BtnCorner1 = Instance.new("UICorner")
+BtnCorner1.CornerRadius = UDim.new(0, 6)
+BtnCorner1.Parent = ToggleSizeBtn
+
+-- Close Button
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Name = "CloseBtn"
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -35, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 14
+CloseBtn.Font = Enum.Font.SourceSansBold
+CloseBtn.Parent = TopBar
+
+local BtnCorner2 = Instance.new("UICorner")
+BtnCorner2.CornerRadius = UDim.new(0, 6)
+BtnCorner2.Parent = CloseBtn
+
+-- Scroll Frame Body
+local ScrollContainer = Instance.new("ScrollingFrame")
+ScrollContainer.Name = "ScrollContainer"
+ScrollContainer.Size = UDim2.new(1, -20, 1, -55)
+ScrollContainer.Position = UDim2.new(0, 10, 0, 48)
+ScrollContainer.BackgroundTransparency = 1
+ScrollContainer.BorderSizePixel = 0
+ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 550)
+ScrollContainer.ScrollBarThickness = 6
+ScrollContainer.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100)
+ScrollContainer.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 10)
+UIListLayout.Parent = ScrollContainer
+
+-- Helper UI Components
+local function CreateSectionHeader(title)
+    local Header = Instance.new("TextLabel")
+    Header.Size = UDim2.new(1, 0, 0, 25)
+    Header.Text = "  " .. title
+    Header.TextColor3 = Color3.fromRGB(180, 180, 200)
+    Header.TextSize = 13
+    Header.Font = Enum.Font.SourceSansBold
+    Header.TextXAlignment = Enum.TextXAlignment.Left
+    Header.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
+    Header.Parent = ScrollContainer
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 4)
+    Corner.Parent = Header
+end
+
+-- Toggle Switch Component
+local ToggleFrame = Instance.new("Frame")
+ToggleFrame.Size = UDim2.new(1, 0, 0, 40)
+ToggleFrame.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
+ToggleFrame.Parent = ScrollContainer
+
+local TFCorner = Instance.new("UICorner")
+TFCorner.CornerRadius = UDim.new(0, 6)
+TFCorner.Parent = ToggleFrame
+
+local ToggleLabel = Instance.new("TextLabel")
+ToggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+ToggleLabel.Position = UDim2.new(0, 10, 0, 0)
+ToggleLabel.Text = "Bật Đổi Màu Hiệu Ứng"
+ToggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleLabel.TextSize = 14
+ToggleLabel.Font = Enum.Font.SourceSans
+ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+ToggleLabel.BackgroundTransparency = 1
+ToggleLabel.Parent = ToggleFrame
+
+local SwitchBtn = Instance.new("TextButton")
+SwitchBtn.Size = UDim2.new(0, 60, 0, 26)
+SwitchBtn.Position = UDim2.new(1, -70, 0.5, -13)
+SwitchBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+SwitchBtn.Text = "TẮT"
+SwitchBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+SwitchBtn.TextSize = 12
+SwitchBtn.Font = Enum.Font.SourceSansBold
+SwitchBtn.Parent = ToggleFrame
+
+local SwitchCorner = Instance.new("UICorner")
+SwitchCorner.CornerRadius = UDim.new(0, 13)
+SwitchCorner.Parent = SwitchBtn
+
+-- Color Grid Setup
+CreateSectionHeader("CHỌN MÀU SẮC")
+
+local ColorGrid = Instance.new("Frame")
+ColorGrid.Size = UDim2.new(1, 0, 0, 180)
+ColorGrid.BackgroundTransparency = 1
+ColorGrid.Parent = ScrollContainer
+
+local UIGridLayout = Instance.new("UIGridLayout")
+UIGridLayout.CellSize = UDim2.new(0, 100, 0, 38)
+UIGridLayout.CellPadding = UDim2.new(0, 10, 0, 8)
+UIGridLayout.Parent = ColorGrid
+
+local activeButtons = {}
+
+local function SelectColor(colorName, colorValue, btn)
+    ColorConfig.CurrentMode = colorName
+    ColorConfig.SelectedColor = colorValue
+    
+    for _, button in pairs(activeButtons) do
+        button.BorderSizePixel = 0
+        local stroke = button:FindFirstChildOfClass("UIStroke")
+        if stroke then stroke:Destroy() end
+    end
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 2
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Parent = btn
+end
+
+for name, color in pairs(ColorPalette) do
+    local Btn = Instance.new("TextButton")
+    Btn.Text = name
+    Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Btn.TextSize = 12
+    Btn.Font = Enum.Font.SourceSansBold
+    Btn.BackgroundColor3 = color
+    Btn.Parent = ColorGrid
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 6)
+    Corner.Parent = Btn
+    
+    -- Icon preview block
+    local IconBlock = Instance.new("Frame")
+    IconBlock.Size = UDim2.new(0, 12, 0, 12)
+    IconBlock.Position = UDim2.new(0, 6, 0.5, -6)
+    IconBlock.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    IconBlock.BackgroundTransparency = 0.2
+    IconBlock.Parent = Btn
+    
+    local IconCorner = Instance.new("UICorner")
+    IconCorner.CornerRadius = UDim.new(1, 0)
+    IconCorner.Parent = IconBlock
+
+    table.insert(activeButtons, Btn)
+
+    Btn.MouseButton1Click:Connect(function()
+        SelectColor(name, color, Btn)
+    end)
+end
+
+-- Rainbow Special Button
+CreateSectionHeader("CHẾ ĐỘ ĐẶC BIỆT")
+
+local RainbowBtn = Instance.new("TextButton")
+RainbowBtn.Size = UDim2.new(1, 0, 0, 42)
+RainbowBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+RainbowBtn.Text = "🌈 MÀU CẦU VỒNG (RAINBOW)"
+RainbowBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+RainbowBtn.TextSize = 14
+RainbowBtn.Font = Enum.Font.SourceSansBold
+RainbowBtn.Parent = ScrollContainer
+
+local RCorner = Instance.new("UICorner")
+RCorner.CornerRadius = UDim.new(0, 6)
+RCorner.Parent = RainbowBtn
+
+table.insert(activeButtons, RainbowBtn)
+
+RainbowBtn.MouseButton1Click:Connect(function()
+    SelectColor("Rainbow", Color3.fromRGB(255, 255, 255), RainbowBtn)
+end)
+
+-- ============================================================================
+-- CORE EFFECT ENGINE (PARTICLE MODIFIER FOR WORLD/SKILLS/DUST)
+-- ============================================================================
+
+local function IsSelfOrWorldEffect(descendant)
+    -- Exclude all players including weapons/swords
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character and descendant:IsDescendantOf(player.Character) then
+            return false
+        end
+    end
+    return true
+end
+
+local function ApplyColorToParticle(particle, targetColor)
+    if particle:IsA("ParticleEmitter") then
+        particle.Color = ColorSequence.new(targetColor)
+    elseif particle:IsA("PointLight") or particle:IsA("SpotLight") or particle:IsA("SurfaceLight") then
+        particle.Color = targetColor
+    end
+end
+
+-- Runtime Tick
+local hue = 0
+RunService.RenderStepped:Connect(function(dt)
+    if not ColorConfig.Enabled then return end
+
+    -- Compute dynamic color state
+    local currentColor = ColorConfig.SelectedColor
+    if ColorConfig.CurrentMode == "Rainbow" then
+        hue = (hue + dt * 0.4) % 1
+        currentColor = Color3.fromHSV(hue, 0.9, 1)
+    end
+
+    -- Process game particles dynamically (effects, dust, skill impact)
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if (obj:IsA("ParticleEmitter") or obj:IsA("Light")) and IsSelfOrWorldEffect(obj) then
+            ApplyColorToParticle(obj, currentColor)
+        end
+    end
+end)
+
+-- Window Resize Logic
+local isMinimized = false
+ToggleSizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        MainFrame:TweenSize(UDim2.new(0, 360, 0, 40), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.2, true)
+        ScrollContainer.Visible = false
+        ToggleSizeBtn.Text = "+"
+    else
+        MainFrame:TweenSize(UDim2.new(0, 360, 0, 420), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.2, true)
+        ScrollContainer.Visible = true
+        ToggleSizeBtn.Text = "-"
+    end
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+SwitchBtn.MouseButton1Click:Connect(function()
+    ColorConfig.Enabled = not ColorConfig.Enabled
+    if ColorConfig.Enabled then
+        SwitchBtn.Text = "BẬT"
+        SwitchBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+        SwitchBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    else
+        SwitchBtn.Text = "TẮT"
+        SwitchBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        SwitchBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    end
+end)
