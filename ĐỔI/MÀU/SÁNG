@@ -1,17 +1,11 @@
 -- ============================================================================
--- BLOX FRUITS COLOR & FIXED FAKE UI ENGINE (PERSISTENT DISPLAY)
+-- BLOX FRUITS COLOR & FAKE UI ENGINE (ULTRA OPTIMIZED - 60 FPS FIXED)
 -- ============================================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
-
--- Real-time UI Lock State
-local FakeValues = {
-    Beli = nil,
-    Level = nil
-}
 
 -- Global State Configuration
 local ColorConfig = {
@@ -135,7 +129,7 @@ ToggleSizeBtn.Text = "-"
 ToggleSizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleSizeBtn.TextSize = 18
 ToggleSizeBtn.Font = Enum.Font.SourceSansBold
-ToggleSizeBtn.Parent = TopBar
+ToggleSizeBtn.Parent = ToggleSizeBtn
 
 local BtnCorner1 = Instance.new("UICorner")
 BtnCorner1.CornerRadius = UDim.new(0, 6)
@@ -217,41 +211,55 @@ local function CreateInputField(placeholderText, onFocusLostCallback)
 end
 
 -- ============================================================================
--- FIXED FAKE LEVEL & BELI ENGINE (LOCKED IN RENDERSTEPPED)
+-- HIGH-PERFORMANCE FAKE UI LOGIC (NO RENDERSTEPPED OVERHEAD)
 -- ============================================================================
-CreateSectionHeader("TÙY CHỈNH HIỂN THỊ (PERSISTENT UI)")
+CreateSectionHeader("TÙY CHỈNH HIỂN THỊ (NO LAG)")
+
+local BeliConnections = {}
+local LevelConnections = {}
 
 CreateInputField("Nhập số Beli ảo...", function(value)
-    FakeValues.Beli = value
-end)
+    -- Clear cũ
+    for _, conn in ipairs(BeliConnections) do conn:Disconnect() end
+    table.clear(BeliConnections)
 
-CreateInputField("Nhập Cấp độ (Level) ảo...", function(value)
-    FakeValues.Level = value
-end)
-
--- Vòng lặp khóa giá trị UI liên tục, tránh bị game cập nhật đè lại
-RunService.RenderStepped:Connect(function()
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     if not playerGui then return end
 
-    local mainHud = playerGui:FindFirstChild("Main") or playerGui:FindFirstChild("HUD")
-    if not mainHud then return end
-
-    -- Khóa giá trị Beli
-    if FakeValues.Beli then
-        for _, obj in ipairs(mainHud:GetDescendants()) do
-            if obj:IsA("TextLabel") and (obj.Name == "Money" or obj.Name == "Beli" or obj.Text:find("%$")) then
-                obj.Text = "$" .. FakeValues.Beli
-            end
+    local targetText = "$" .. value
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextLabel") and (obj.Name == "Money" or obj.Name == "Beli" or (obj.Text:find("%$") and not obj:IsDescendantOf(ScreenGui))) then
+            obj.Text = targetText
+            -- Tự động khóa lại khi game thay đổi giá trị mà không tốn CPU
+            local conn = obj:GetPropertyChangedSignal("Text"):Connect(function()
+                if obj.Text ~= targetText then
+                    obj.Text = targetText
+                end
+            end)
+            table.insert(BeliConnections, conn)
         end
     end
+end)
 
-    -- Khóa giá trị Level (Lọc chính xác frame Level, bỏ qua Skill/Mastery)
-    if FakeValues.Level then
-        for _, obj in ipairs(mainHud:GetDescendants()) do
-            if obj:IsA("TextLabel") and obj.Name == "Level" then
-                obj.Text = "Cấp " .. FakeValues.Level
-            end
+CreateInputField("Nhập Cấp độ (Level) ảo...", function(value)
+    -- Clear cũ
+    for _, conn in ipairs(LevelConnections) do conn:Disconnect() end
+    table.clear(LevelConnections)
+
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+
+    local targetText = "Cấp " .. value
+    for _, obj in ipairs(playerGui:GetDescendants()) do
+        if obj:IsA("TextLabel") and obj.Name == "Level" and not obj:IsDescendantOf(ScreenGui) then
+            obj.Text = targetText
+            -- Tự động khóa lại khi game thay đổi giá trị mà không tốn CPU
+            local conn = obj:GetPropertyChangedSignal("Text"):Connect(function()
+                if obj.Text ~= targetText then
+                    obj.Text = targetText
+                end
+            end)
+            table.insert(LevelConnections, conn)
         end
     end
 end)
@@ -369,7 +377,7 @@ RainbowBtn.MouseButton1Click:Connect(function()
     SelectColor("Rainbow", Color3.fromRGB(255, 255, 255), RainbowBtn)
 end)
 
--- Main Loop Optimization
+-- Dynamic Rainbow Loop
 local hue = 0
 RunService.RenderStepped:Connect(function(dt)
     if not ColorConfig.Enabled then return end
