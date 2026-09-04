@@ -1,5 +1,5 @@
 -- ============================================================================
--- BLOX FRUITS COLOR & FAKE UI ENGINE (ULTRA OPTIMIZED - 60 FPS FIXED)
+-- BLOX FRUITS COLOR & FAKE UI ENGINE (FULL FIX UI & PERFORMANCE)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -115,7 +115,7 @@ TitleLabel.Size = UDim2.new(1, -90, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.Text = "MENU ĐỔI MÀU & FAKE LEVEL/BELI"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 14
+TitleLabel.TextSize = 13
 TitleLabel.Font = Enum.Font.SourceSansBold
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.BackgroundTransparency = 1
@@ -129,7 +129,7 @@ ToggleSizeBtn.Text = "-"
 ToggleSizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleSizeBtn.TextSize = 18
 ToggleSizeBtn.Font = Enum.Font.SourceSansBold
-ToggleSizeBtn.Parent = ToggleSizeBtn
+ToggleSizeBtn.Parent = TopBar
 
 local BtnCorner1 = Instance.new("UICorner")
 BtnCorner1.CornerRadius = UDim.new(0, 6)
@@ -154,7 +154,7 @@ ScrollContainer.Size = UDim2.new(1, -20, 1, -55)
 ScrollContainer.Position = UDim2.new(0, 10, 0, 48)
 ScrollContainer.BackgroundTransparency = 1
 ScrollContainer.BorderSizePixel = 0
-ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 680)
+ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 650)
 ScrollContainer.ScrollBarThickness = 6
 ScrollContainer.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100)
 ScrollContainer.Parent = MainFrame
@@ -211,55 +211,45 @@ local function CreateInputField(placeholderText, onFocusLostCallback)
 end
 
 -- ============================================================================
--- HIGH-PERFORMANCE FAKE UI LOGIC (NO RENDERSTEPPED OVERHEAD)
+-- SAFE FAKE UI ENGINE (OPTIMIZED TIMED INTERVAL LOCK)
 -- ============================================================================
-CreateSectionHeader("TÙY CHỈNH HIỂN THỊ (NO LAG)")
+CreateSectionHeader("TÙY CHỈNH HIỂN THỊ")
 
-local BeliConnections = {}
-local LevelConnections = {}
+local FakeBeliValue = nil
+local FakeLevelValue = nil
 
 CreateInputField("Nhập số Beli ảo...", function(value)
-    -- Clear cũ
-    for _, conn in ipairs(BeliConnections) do conn:Disconnect() end
-    table.clear(BeliConnections)
-
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-
-    local targetText = "$" .. value
-    for _, obj in ipairs(playerGui:GetDescendants()) do
-        if obj:IsA("TextLabel") and (obj.Name == "Money" or obj.Name == "Beli" or (obj.Text:find("%$") and not obj:IsDescendantOf(ScreenGui))) then
-            obj.Text = targetText
-            -- Tự động khóa lại khi game thay đổi giá trị mà không tốn CPU
-            local conn = obj:GetPropertyChangedSignal("Text"):Connect(function()
-                if obj.Text ~= targetText then
-                    obj.Text = targetText
-                end
-            end)
-            table.insert(BeliConnections, conn)
-        end
-    end
+    FakeBeliValue = "$" .. value
 end)
 
 CreateInputField("Nhập Cấp độ (Level) ảo...", function(value)
-    -- Clear cũ
-    for _, conn in ipairs(LevelConnections) do conn:Disconnect() end
-    table.clear(LevelConnections)
+    FakeLevelValue = "Cấp " .. value
+end)
 
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-
-    local targetText = "Cấp " .. value
-    for _, obj in ipairs(playerGui:GetDescendants()) do
-        if obj:IsA("TextLabel") and obj.Name == "Level" and not obj:IsDescendantOf(ScreenGui) then
-            obj.Text = targetText
-            -- Tự động khóa lại khi game thay đổi giá trị mà không tốn CPU
-            local conn = obj:GetPropertyChangedSignal("Text"):Connect(function()
-                if obj.Text ~= targetText then
-                    obj.Text = targetText
+-- Sử dụng task.spawn kiểm tra nhẹ mỗi 0.5s để giấu lag hoàn toàn
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if playerGui then
+            if FakeBeliValue then
+                for _, obj in ipairs(playerGui:GetDescendants()) do
+                    if obj:IsA("TextLabel") and (obj.Name == "Money" or obj.Name == "Beli") then
+                        if obj.Text ~= FakeBeliValue then
+                            obj.Text = FakeBeliValue
+                        end
+                    end
                 end
-            end)
-            table.insert(LevelConnections, conn)
+            end
+            if FakeLevelValue then
+                for _, obj in ipairs(playerGui:GetDescendants()) do
+                    if obj:IsA("TextLabel") and obj.Name == "Level" then
+                        if obj.Text ~= FakeLevelValue then
+                            obj.Text = FakeLevelValue
+                        end
+                    end
+                end
+            end
         end
     end
 end)
@@ -377,7 +367,7 @@ RainbowBtn.MouseButton1Click:Connect(function()
     SelectColor("Rainbow", Color3.fromRGB(255, 255, 255), RainbowBtn)
 end)
 
--- Dynamic Rainbow Loop
+-- Rainbow Engine Loop
 local hue = 0
 RunService.RenderStepped:Connect(function(dt)
     if not ColorConfig.Enabled then return end
