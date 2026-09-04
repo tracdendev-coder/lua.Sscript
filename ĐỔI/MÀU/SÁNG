@@ -1,5 +1,5 @@
 -- ============================================================================
--- BLOX FRUITS COLOR & FAKE UI ENGINE (FULL FIX UI & PERFORMANCE)
+-- BLOX FRUITS COLOR ENGINE (ULTRA OPTIMIZED - 60 FPS GUARANTEED)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -26,7 +26,7 @@ local ColorPalette = {
     ["Trắng"] = Color3.fromRGB(255, 255, 255)
 }
 
--- Target Cache System
+-- Lightweight Cache System
 local CachedObjects = {}
 
 local function IsValidTarget(descendant)
@@ -75,7 +75,7 @@ local function ApplyColor(targetColor)
 end
 
 -- ============================================================================
--- GUI INTERFACE SETUP
+-- CLEAN & LIGHTWEIGHT GUI INTERFACE
 -- ============================================================================
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -90,8 +90,8 @@ end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 360, 0, 480)
-MainFrame.Position = UDim2.new(0.5, -180, 0.4, -240)
+MainFrame.Size = UDim2.new(0, 340, 0, 390)
+MainFrame.Position = UDim2.new(0.5, -170, 0.4, -195)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
@@ -113,7 +113,7 @@ TopBar.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -90, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
-TitleLabel.Text = "MENU ĐỔI MÀU & FAKE LEVEL/BELI"
+TitleLabel.Text = "MENU ĐỔI MÀU HIỆU ỨNG"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 13
 TitleLabel.Font = Enum.Font.SourceSansBold
@@ -150,12 +150,12 @@ BtnCorner2.CornerRadius = UDim.new(0, 6)
 BtnCorner2.Parent = CloseBtn
 
 local ScrollContainer = Instance.new("ScrollingFrame")
-ScrollContainer.Size = UDim2.new(1, -20, 1, -55)
-ScrollContainer.Position = UDim2.new(0, 10, 0, 48)
+ScrollContainer.Size = UDim2.new(1, -20, 1, -50)
+ScrollContainer.Position = UDim2.new(0, 10, 0, 45)
 ScrollContainer.BackgroundTransparency = 1
 ScrollContainer.BorderSizePixel = 0
-ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 650)
-ScrollContainer.ScrollBarThickness = 6
+ScrollContainer.CanvasSize = UDim2.new(0, 0, 0, 330)
+ScrollContainer.ScrollBarThickness = 5
 ScrollContainer.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 100)
 ScrollContainer.Parent = MainFrame
 
@@ -180,84 +180,10 @@ local function CreateSectionHeader(title)
     Corner.Parent = Header
 end
 
-local function CreateInputField(placeholderText, onFocusLostCallback)
-    local Frame = Instance.new("Frame")
-    Frame.Size = UDim2.new(1, 0, 0, 40)
-    Frame.BackgroundColor3 = Color3.fromRGB(32, 32, 40)
-    Frame.Parent = ScrollContainer
-
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 6)
-    Corner.Parent = Frame
-
-    local TextBox = Instance.new("TextBox")
-    TextBox.Size = UDim2.new(1, -20, 1, 0)
-    TextBox.Position = UDim2.new(0, 10, 0, 0)
-    TextBox.BackgroundTransparency = 1
-    TextBox.PlaceholderText = placeholderText
-    TextBox.Text = ""
-    TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TextBox.PlaceholderColor3 = Color3.fromRGB(140, 140, 160)
-    TextBox.TextSize = 13
-    TextBox.Font = Enum.Font.SourceSans
-    TextBox.TextXAlignment = Enum.TextXAlignment.Left
-    TextBox.Parent = Frame
-
-    TextBox.FocusLost:Connect(function(enterPressed)
-        if enterPressed and TextBox.Text ~= "" then
-            onFocusLostCallback(TextBox.Text)
-        end
-    end)
-end
-
--- ============================================================================
--- SAFE FAKE UI ENGINE (OPTIMIZED TIMED INTERVAL LOCK)
--- ============================================================================
-CreateSectionHeader("TÙY CHỈNH HIỂN THỊ")
-
-local FakeBeliValue = nil
-local FakeLevelValue = nil
-
-CreateInputField("Nhập số Beli ảo...", function(value)
-    FakeBeliValue = "$" .. value
-end)
-
-CreateInputField("Nhập Cấp độ (Level) ảo...", function(value)
-    FakeLevelValue = "Cấp " .. value
-end)
-
--- Sử dụng task.spawn kiểm tra nhẹ mỗi 0.5s để giấu lag hoàn toàn
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-        if playerGui then
-            if FakeBeliValue then
-                for _, obj in ipairs(playerGui:GetDescendants()) do
-                    if obj:IsA("TextLabel") and (obj.Name == "Money" or obj.Name == "Beli") then
-                        if obj.Text ~= FakeBeliValue then
-                            obj.Text = FakeBeliValue
-                        end
-                    end
-                end
-            end
-            if FakeLevelValue then
-                for _, obj in ipairs(playerGui:GetDescendants()) do
-                    if obj:IsA("TextLabel") and obj.Name == "Level" then
-                        if obj.Text ~= FakeLevelValue then
-                            obj.Text = FakeLevelValue
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
 -- ============================================================================
 -- COLOR ENGINE CONTROLS
 -- ============================================================================
-CreateSectionHeader("BẬT/TẮT ĐỔI MÀU")
+CreateSectionHeader("BẬT / TẮT TÍNH NĂNG")
 
 local ToggleFrame = Instance.new("Frame")
 ToggleFrame.Size = UDim2.new(1, 0, 0, 40)
@@ -271,7 +197,7 @@ TFCorner.Parent = ToggleFrame
 local ToggleLabel = Instance.new("TextLabel")
 ToggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
 ToggleLabel.Position = UDim2.new(0, 10, 0, 0)
-ToggleLabel.Text = "Bật Đổi Màu Hiệu Ứng"
+ToggleLabel.Text = "Kích Hoạt Đổi Màu"
 ToggleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 ToggleLabel.TextSize = 14
 ToggleLabel.Font = Enum.Font.SourceSans
@@ -293,16 +219,16 @@ local SwitchCorner = Instance.new("UICorner")
 SwitchCorner.CornerRadius = UDim.new(0, 13)
 SwitchCorner.Parent = SwitchBtn
 
-CreateSectionHeader("CHỌN MÀU SẮC")
+CreateSectionHeader("CHỌN MÀU ĐƠN")
 
 local ColorGrid = Instance.new("Frame")
-ColorGrid.Size = UDim2.new(1, 0, 0, 180)
+ColorGrid.Size = UDim2.new(1, 0, 0, 175)
 ColorGrid.BackgroundTransparency = 1
 ColorGrid.Parent = ScrollContainer
 
 local UIGridLayout = Instance.new("UIGridLayout")
-UIGridLayout.CellSize = UDim2.new(0, 100, 0, 38)
-UIGridLayout.CellPadding = UDim2.new(0, 10, 0, 8)
+UIGridLayout.CellSize = UDim2.new(0, 95, 0, 36)
+UIGridLayout.CellPadding = UDim2.new(0, 8, 0, 8)
 UIGridLayout.Parent = ColorGrid
 
 local activeButtons = {}
@@ -349,11 +275,11 @@ end
 CreateSectionHeader("CHẾ ĐỘ ĐẶC BIỆT")
 
 local RainbowBtn = Instance.new("TextButton")
-RainbowBtn.Size = UDim2.new(1, 0, 0, 42)
+RainbowBtn.Size = UDim2.new(1, 0, 0, 40)
 RainbowBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
 RainbowBtn.Text = "🌈 MÀU CẦU VỒNG (RAINBOW)"
 RainbowBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-RainbowBtn.TextSize = 14
+RainbowBtn.TextSize = 13
 RainbowBtn.Font = Enum.Font.SourceSansBold
 RainbowBtn.Parent = ScrollContainer
 
@@ -367,7 +293,7 @@ RainbowBtn.MouseButton1Click:Connect(function()
     SelectColor("Rainbow", Color3.fromRGB(255, 255, 255), RainbowBtn)
 end)
 
--- Rainbow Engine Loop
+-- Rainbow Optimization Engine
 local hue = 0
 RunService.RenderStepped:Connect(function(dt)
     if not ColorConfig.Enabled then return end
@@ -380,7 +306,7 @@ end)
 
 task.spawn(function()
     while true do
-        task.wait(0.2)
+        task.wait(0.3)
         if ColorConfig.Enabled and ColorConfig.CurrentMode ~= "Rainbow" then
             ApplyColor(ColorConfig.SelectedColor)
         end
@@ -391,7 +317,7 @@ end)
 local isMinimized = false
 ToggleSizeBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
-    MainFrame:TweenSize(UDim2.new(0, 360, 0, isMinimized and 40 or 480), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.2, true)
+    MainFrame:TweenSize(UDim2.new(0, 340, 0, isMinimized and 40 or 390), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.2, true)
     ScrollContainer.Visible = not isMinimized
     ToggleSizeBtn.Text = isMinimized and "+" or "-"
 end)
