@@ -1,537 +1,693 @@
---// COLOR SWAP MENU v5.0
---// LocalScript - Roblox Studio
---// Ép màu hiệu ứng 100%, menu kéo/thay đổi kích thước/đóng/ẩn
---// Không đổi BasePart, không đổi vũ khí, không ảnh hưởng người chơi khác
+--[[
+    ColorSwap Menu v4.1
+    🍇 HÀNH TÍM 100% - DEEP COLOR
+    LocalScript - Roblox Studio
+    Chỉ đổi màu hiệu ứng phía client.
+]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local LocalPlayer = Players.LocalPlayer
 
 --==================================================
 -- CONFIG
 --==================================================
 
 local CONFIG = {
-	DeepColor = true,
-	ScanInterval = 0.5,
-	RainbowSpeed = 0.35,
-	MinSize = Vector2.new(300, 230),
-	MaxSize = Vector2.new(650, 520),
-	DefaultSize = Vector2.new(430, 350),
+    DeepColorMode = true,
+    ScanInterval = 0.5,
+    MaxDistance = 250,
 }
 
 --==================================================
--- COLORS
+-- BẢNG MÀU
 --==================================================
 
 local COLORS = {
-	{Name = "Đỏ",        Color = Color3.fromRGB(255, 0, 0)},
-	{Name = "Hồng",      Color = Color3.fromRGB(255, 80, 170)},
-	{Name = "Cam",       Color = Color3.fromRGB(255, 130, 0)},
-	{Name = "Vàng",      Color = Color3.fromRGB(255, 235, 0)},
-	{Name = "Xanh lá",   Color = Color3.fromRGB(0, 255, 90)},
-	{Name = "Xanh ngọc", Color = Color3.fromRGB(0, 255, 210)},
-	{Name = "Xanh dương",Color = Color3.fromRGB(0, 130, 255)},
-	{Name = "Tím",       Color = Color3.fromRGB(150, 50, 255)},
-	{Name = "Tím hồng",  Color = Color3.fromRGB(220, 50, 255)},
-	{Name = "Trắng",     Color = Color3.fromRGB(255, 255, 255)},
-	{Name = "Đen",       Color = Color3.fromRGB(20, 20, 20)},
+    {
+        Name = "Đỏ",
+        Value = Color3.fromRGB(255, 0, 0)
+    },
+
+    {
+        Name = "Cam",
+        Value = Color3.fromRGB(255, 120, 0)
+    },
+
+    {
+        Name = "Vàng",
+        Value = Color3.fromRGB(255, 220, 0)
+    },
+
+    {
+        Name = "Xanh lá",
+        Value = Color3.fromRGB(0, 255, 80)
+    },
+
+    {
+        Name = "Xanh dương",
+        Value = Color3.fromRGB(0, 120, 255)
+    },
+
+    {
+        Name = "Hành tím",
+        Value = Color3.fromRGB(145, 40, 220)
+    },
+
+    {
+        Name = "Tím đậm",
+        Value = Color3.fromRGB(85, 0, 150)
+    },
+
+    {
+        Name = "Trắng",
+        Value = Color3.fromRGB(255, 255, 255)
+    },
+
+    {
+        Name = "Đen",
+        Value = Color3.fromRGB(15, 15, 15)
+    },
 }
 
-local currentColor = COLORS[1]
-local rainbowEnabled = false
-local rainbowHue = 0
-
 --==================================================
--- PURE COLOR
+-- BIẾN
 --==================================================
 
-local function PureSequence(color)
-	if not CONFIG.DeepColor then
-		return ColorSequence.new(color)
-	end
+local CurrentColor = COLORS[6]
+local Rainbow = false
+local RainbowHue = 0
 
-	return ColorSequence.new({
-		ColorSequenceKeypoint.new(0, color),
-		ColorSequenceKeypoint.new(0.25, color),
-		ColorSequenceKeypoint.new(0.5, color),
-		ColorSequenceKeypoint.new(0.75, color),
-		ColorSequenceKeypoint.new(1, color),
-	})
+local Gui
+local Main
+local Open = false
+
+--==================================================
+-- RAINBOW
+--==================================================
+
+local function GetCurrentColor()
+
+    if Rainbow then
+        RainbowHue = (RainbowHue + 0.004) % 1
+
+        return Color3.fromHSV(
+            RainbowHue,
+            1,
+            1
+        )
+    end
+
+    return CurrentColor.Value
 end
 
 --==================================================
--- APPLY COLOR
+-- PURE COLOR SEQUENCE
 --==================================================
 
-local function ApplyColor(obj, color)
-	if not obj or not obj.Parent then
-		return
-	end
+local function PureColorSequence(Color)
 
-	-- Particle
-	if obj:IsA("ParticleEmitter") then
-		pcall(function()
-			obj.Color = PureSequence(color)
-		end)
-	end
+    return ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color),
+        ColorSequenceKeypoint.new(0.25, Color),
+        ColorSequenceKeypoint.new(0.5, Color),
+        ColorSequenceKeypoint.new(0.75, Color),
+        ColorSequenceKeypoint.new(1, Color),
+    })
 
-	-- Trail
-	if obj:IsA("Trail") then
-		pcall(function()
-			obj.Color = PureSequence(color)
-		end)
-	end
-
-	-- Beam
-	if obj:IsA("Beam") then
-		pcall(function()
-			obj.Color = PureSequence(color)
-		end)
-	end
-
-	-- Lights
-	if obj:IsA("PointLight")
-		or obj:IsA("SpotLight")
-		or obj:IsA("SurfaceLight") then
-
-		pcall(function()
-			obj.Color = color
-		end)
-	end
-
-	-- Highlight
-	if obj:IsA("Highlight") then
-		pcall(function()
-			obj.FillColor = color
-			obj.OutlineColor = color
-		end)
-	end
 end
 
 --==================================================
--- SCAN
+-- KHOẢNG CÁCH
+--==================================================
+
+local function InRange(Object)
+
+    local Camera = workspace.CurrentCamera
+
+    if not Camera then
+        return true
+    end
+
+    local Part = Object:IsA("BasePart")
+        and Object
+        or Object:FindFirstAncestorWhichIsA("BasePart")
+
+    if not Part then
+        return true
+    end
+
+    return (
+        Part.Position - Camera.CFrame.Position
+    ).Magnitude <= CONFIG.MaxDistance
+
+end
+
+--==================================================
+-- PARTICLE
+--==================================================
+
+local function ChangeParticle(Object, Color)
+
+    if not Object:IsA("ParticleEmitter") then
+        return
+    end
+
+    pcall(function()
+
+        Object.Color = PureColorSequence(Color)
+
+    end)
+
+end
+
+--==================================================
+-- TRAIL
+--==================================================
+
+local function ChangeTrail(Object, Color)
+
+    if not Object:IsA("Trail") then
+        return
+    end
+
+    pcall(function()
+
+        Object.Color = PureColorSequence(Color)
+
+    end)
+
+end
+
+--==================================================
+-- BEAM
+--==================================================
+
+local function ChangeBeam(Object, Color)
+
+    if not Object:IsA("Beam") then
+        return
+    end
+
+    pcall(function()
+
+        Object.Color = PureColorSequence(Color)
+
+    end)
+
+end
+
+--==================================================
+-- LIGHT
+--==================================================
+
+local function ChangeLight(Object, Color)
+
+    if not (
+        Object:IsA("PointLight")
+        or Object:IsA("SpotLight")
+        or Object:IsA("SurfaceLight")
+    ) then
+        return
+    end
+
+    pcall(function()
+
+        Object.Color = Color
+
+    end)
+
+end
+
+--==================================================
+-- HIGHLIGHT
+--==================================================
+
+local function ChangeHighlight(Object, Color)
+
+    if not Object:IsA("Highlight") then
+        return
+    end
+
+    pcall(function()
+
+        Object.FillColor = Color
+        Object.OutlineColor = Color
+
+    end)
+
+end
+
+--==================================================
+-- ĐỔI MÀU SÂU
+--==================================================
+
+local function ApplyDeepColor(Object, Color)
+
+    if not Object
+        or not Object.Parent
+        or not InRange(Object) then
+        return
+    end
+
+    ChangeParticle(Object, Color)
+    ChangeTrail(Object, Color)
+    ChangeBeam(Object, Color)
+    ChangeLight(Object, Color)
+    ChangeHighlight(Object, Color)
+
+end
+
+--==================================================
+-- SCAN TOÀN BỘ HIỆU ỨNG
 --==================================================
 
 local function ScanEffects()
-	local character = Player.Character
 
-	if character then
-		for _, obj in ipairs(character:GetDescendants()) do
-			if obj:IsA("ParticleEmitter")
-				or obj:IsA("Trail")
-				or obj:IsA("Beam")
-				or obj:IsA("PointLight")
-				or obj:IsA("SpotLight")
-				or obj:IsA("SurfaceLight")
-				or obj:IsA("Highlight") then
+    local Color = GetCurrentColor()
 
-				if rainbowEnabled then
-					local rainbowColor =
-						Color3.fromHSV(rainbowHue, 1, 1)
+    -- Character local
+    local Character = LocalPlayer.Character
 
-					ApplyColor(obj, rainbowColor)
-				else
-					ApplyColor(obj, currentColor.Color)
-				end
-			end
-		end
-	end
+    if Character then
+
+        for _, Object in ipairs(
+            Character:GetDescendants()
+        ) do
+
+            ApplyDeepColor(Object, Color)
+
+        end
+
+    end
+
+    -- Workspace effects
+    for _, Object in ipairs(
+        workspace:GetDescendants()
+    ) do
+
+        if Object:IsA("ParticleEmitter")
+            or Object:IsA("Trail")
+            or Object:IsA("Beam")
+            or Object:IsA("PointLight")
+            or Object:IsA("SpotLight")
+            or Object:IsA("SurfaceLight")
+            or Object:IsA("Highlight") then
+
+            ApplyDeepColor(Object, Color)
+
+        end
+
+    end
+
 end
 
 --==================================================
 -- GUI
 --==================================================
 
-local oldGui = PlayerGui:FindFirstChild("ColorSwapMenuV5")
+local function CreateMenu()
 
-if oldGui then
-	oldGui:Destroy()
+    if Gui then
+        Gui.Enabled = true
+        return
+    end
+
+    Gui = Instance.new("ScreenGui")
+    Gui.Name = "ColorSwapMenu"
+    Gui.ResetOnSpawn = false
+    Gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+    Main = Instance.new("Frame")
+    Main.Size = UDim2.fromOffset(330, 390)
+    Main.Position = UDim2.new(
+        0.5,
+        -165,
+        0.5,
+        -195
+    )
+
+    Main.BackgroundColor3 =
+        Color3.fromRGB(20, 20, 25)
+
+    Main.BorderSizePixel = 0
+    Main.Parent = Gui
+
+    local Corner =
+        Instance.new("UICorner")
+
+    Corner.CornerRadius =
+        UDim.new(0, 14)
+
+    Corner.Parent = Main
+
+    --==================================================
+    -- TITLE
+    --==================================================
+
+    local Title =
+        Instance.new("TextLabel")
+
+    Title.Size =
+        UDim2.new(1, -20, 0, 45)
+
+    Title.Position =
+        UDim2.fromOffset(10, 5)
+
+    Title.BackgroundTransparency = 1
+
+    Title.Text =
+        "🎨 COLOR SWAP • DEEP MODE"
+
+    Title.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    Title.TextSize = 18
+    Title.Font = Enum.Font.GothamBold
+
+    Title.Parent = Main
+
+    --==================================================
+    -- STATUS
+    --==================================================
+
+    local Status =
+        Instance.new("TextLabel")
+
+    Status.Name = "Status"
+
+    Status.Size =
+        UDim2.new(1, -20, 0, 35)
+
+    Status.Position =
+        UDim2.fromOffset(10, 48)
+
+    Status.BackgroundTransparency = 1
+
+    Status.Text =
+        "Màu hiện tại: 🍇 Hành tím 100%"
+
+    Status.TextColor3 =
+        CurrentColor.Value
+
+    Status.TextSize = 14
+    Status.Font = Enum.Font.GothamMedium
+
+    Status.Parent = Main
+
+    --==================================================
+    -- SCROLL
+    --==================================================
+
+    local Scroll =
+        Instance.new("ScrollingFrame")
+
+    Scroll.Size =
+        UDim2.new(1, -20, 1, -135)
+
+    Scroll.Position =
+        UDim2.fromOffset(10, 85)
+
+    Scroll.BackgroundTransparency = 1
+
+    Scroll.BorderSizePixel = 0
+
+    Scroll.ScrollBarThickness = 4
+
+    Scroll.CanvasSize =
+        UDim2.new(0, 0, 0, 430)
+
+    Scroll.Parent = Main
+
+    local Layout =
+        Instance.new("UIListLayout")
+
+    Layout.Padding =
+        UDim.new(0, 7)
+
+    Layout.HorizontalAlignment =
+        Enum.HorizontalAlignment.Center
+
+    Layout.Parent = Scroll
+
+    --==================================================
+    -- COLOR BUTTONS
+    --==================================================
+
+    for _, ColorData in ipairs(COLORS) do
+
+        local Button =
+            Instance.new("TextButton")
+
+        Button.Size =
+            UDim2.new(1, -10, 0, 38)
+
+        Button.BackgroundColor3 =
+            ColorData.Value
+
+        Button.BorderSizePixel = 0
+
+        Button.Text =
+            ColorData.Name
+
+        Button.TextColor3 =
+            Color3.fromRGB(255, 255, 255)
+
+        Button.TextSize = 14
+
+        Button.Font =
+            Enum.Font.GothamBold
+
+        Button.Parent = Scroll
+
+        local ButtonCorner =
+            Instance.new("UICorner")
+
+        ButtonCorner.CornerRadius =
+            UDim.new(0, 8)
+
+        ButtonCorner.Parent = Button
+
+        Button.MouseButton1Click:Connect(function()
+
+            CurrentColor = ColorData
+            Rainbow = false
+
+            Status.Text =
+                "Màu hiện tại: " ..
+                ColorData.Name ..
+                " • 100%"
+
+            Status.TextColor3 =
+                ColorData.Value
+
+            ScanEffects()
+
+        end)
+
+    end
+
+    --==================================================
+    -- RAINBOW
+    --==================================================
+
+    local RainbowButton =
+        Instance.new("TextButton")
+
+    RainbowButton.Size =
+        UDim2.new(1, -10, 0, 38)
+
+    RainbowButton.BackgroundColor3 =
+        Color3.fromRGB(100, 50, 180)
+
+    RainbowButton.BorderSizePixel = 0
+
+    RainbowButton.Text =
+        "🌈 Cầu vồng"
+
+    RainbowButton.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    RainbowButton.TextSize = 14
+
+    RainbowButton.Font =
+        Enum.Font.GothamBold
+
+    RainbowButton.Parent = Scroll
+
+    local RC =
+        Instance.new("UICorner")
+
+    RC.CornerRadius =
+        UDim.new(0, 8)
+
+    RC.Parent = RainbowButton
+
+    RainbowButton.MouseButton1Click:Connect(function()
+
+        Rainbow = true
+
+        Status.Text =
+            "Màu hiện tại: 🌈 Cầu vồng"
+
+        ScanEffects()
+
+    end)
+
+    --==================================================
+    -- APPLY
+    --==================================================
+
+    local Apply =
+        Instance.new("TextButton")
+
+    Apply.Size =
+        UDim2.new(1, -20, 0, 40)
+
+    Apply.Position =
+        UDim2.new(0, 10, 1, -48)
+
+    Apply.BackgroundColor3 =
+        Color3.fromRGB(40, 40, 50)
+
+    Apply.BorderSizePixel = 0
+
+    Apply.Text =
+        "⚡ ÉP MÀU 100%"
+
+    Apply.TextColor3 =
+        Color3.fromRGB(255, 255, 255)
+
+    Apply.TextSize = 14
+
+    Apply.Font =
+        Enum.Font.GothamBold
+
+    Apply.Parent = Main
+
+    local AC =
+        Instance.new("UICorner")
+
+    AC.CornerRadius =
+        UDim.new(0, 8)
+
+    AC.Parent = Apply
+
+    Apply.MouseButton1Click:Connect(function()
+
+        ScanEffects()
+
+    end)
+
+    --==================================================
+    -- DRAG
+    --==================================================
+
+    local Dragging = false
+    local DragStart
+    local StartPosition
+
+    Main.InputBegan:Connect(function(Input)
+
+        if Input.UserInputType ==
+            Enum.UserInputType.MouseButton1 then
+
+            Dragging = true
+            DragStart = Input.Position
+            StartPosition = Main.Position
+
+        end
+
+    end)
+
+    Main.InputEnded:Connect(function(Input)
+
+        if Input.UserInputType ==
+            Enum.UserInputType.MouseButton1 then
+
+            Dragging = false
+
+        end
+
+    end)
+
+    UserInputService.InputChanged:Connect(function(Input)
+
+        if not Dragging then
+            return
+        end
+
+        if Input.UserInputType ==
+            Enum.UserInputType.MouseMovement then
+
+            local Delta =
+                Input.Position - DragStart
+
+            Main.Position =
+                UDim2.new(
+                    StartPosition.X.Scale,
+                    StartPosition.X.Offset + Delta.X,
+                    StartPosition.Y.Scale,
+                    StartPosition.Y.Offset + Delta.Y
+                )
+
+        end
+
+    end)
+
 end
 
-local Gui = Instance.new("ScreenGui")
-Gui.Name = "ColorSwapMenuV5"
-Gui.ResetOnSpawn = false
-Gui.IgnoreGuiInset = true
-Gui.Parent = PlayerGui
-
 --==================================================
--- OPEN BUTTON
+-- PHÍM M
 --==================================================
 
-local OpenButton = Instance.new("TextButton")
-OpenButton.Name = "OpenButton"
-OpenButton.Size = UDim2.fromOffset(120, 38)
-OpenButton.Position = UDim2.new(0, 15, 0.5, -20)
-OpenButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-OpenButton.TextColor3 = Color3.new(1, 1, 1)
-OpenButton.Text = "🎨 MÀU"
-OpenButton.TextSize = 15
-OpenButton.Font = Enum.Font.GothamBold
-OpenButton.Visible = false
-OpenButton.Parent = Gui
-
-local OpenCorner = Instance.new("UICorner")
-OpenCorner.CornerRadius = UDim.new(0, 10)
-OpenCorner.Parent = OpenButton
-
---==================================================
--- MAIN FRAME
---==================================================
-
-local Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.fromOffset(
-	CONFIG.DefaultSize.X,
-	CONFIG.DefaultSize.Y
+UserInputService.InputBegan:Connect(function(
+    Input,
+    GameProcessed
 )
 
-Main.Position = UDim2.new(
-	0.5,
-	-CONFIG.DefaultSize.X / 2,
-	0.5,
-	-CONFIG.DefaultSize.Y / 2
-)
+    if GameProcessed then
+        return
+    end
 
-Main.BackgroundColor3 = Color3.fromRGB(18, 18, 23)
-Main.BorderSizePixel = 0
-Main.Parent = Gui
+    if Input.KeyCode == Enum.KeyCode.M then
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
-MainCorner.Parent = Main
+        Open = not Open
 
---==================================================
--- HEADER
---==================================================
+        if Open then
+            CreateMenu()
+        elseif Gui then
+            Gui.Enabled = false
+        end
 
-local Header = Instance.new("Frame")
-Header.Size = UDim2.new(1, 0, 0, 48)
-Header.BackgroundColor3 = Color3.fromRGB(28, 28, 35)
-Header.BorderSizePixel = 0
-Header.Parent = Main
+    end
 
-local HeaderCorner = Instance.new("UICorner")
-HeaderCorner.CornerRadius = UDim.new(0, 12)
-HeaderCorner.Parent = Header
-
-local Title = Instance.new("TextLabel")
-Title.BackgroundTransparency = 1
-Title.Position = UDim2.fromOffset(15, 0)
-Title.Size = UDim2.new(1, -130, 1, 0)
-Title.Text = "🎨 COLOR SWAP • DEEP 100%"
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 16
-Title.Font = Enum.Font.GothamBold
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = Header
-
---==================================================
--- MINIMIZE
---==================================================
-
-local Minimize = Instance.new("TextButton")
-Minimize.Size = UDim2.fromOffset(36, 30)
-Minimize.Position = UDim2.new(1, -82, 0, 9)
-Minimize.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
-Minimize.Text = "—"
-Minimize.TextColor3 = Color3.new(1, 1, 1)
-Minimize.TextSize = 20
-Minimize.Font = Enum.Font.GothamBold
-Minimize.Parent = Header
-
-local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 7)
-MinCorner.Parent = Minimize
-
---==================================================
--- CLOSE
---==================================================
-
-local Close = Instance.new("TextButton")
-Close.Size = UDim2.fromOffset(36, 30)
-Close.Position = UDim2.new(1, -42, 0, 9)
-Close.BackgroundColor3 = Color3.fromRGB(190, 45, 55)
-Close.Text = "X"
-Close.TextColor3 = Color3.new(1, 1, 1)
-Close.TextSize = 15
-Close.Font = Enum.Font.GothamBold
-Close.Parent = Header
-
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 7)
-CloseCorner.Parent = Close
-
---==================================================
--- CONTENT
---==================================================
-
-local Content = Instance.new("ScrollingFrame")
-Content.Position = UDim2.fromOffset(10, 58)
-Content.Size = UDim2.new(1, -20, 1, -68)
-Content.BackgroundTransparency = 1
-Content.BorderSizePixel = 0
-Content.ScrollBarThickness = 5
-Content.CanvasSize = UDim2.new(0, 0, 0, 0)
-Content.Parent = Main
-
-local Layout = Instance.new("UIGridLayout")
-Layout.CellSize = UDim2.fromOffset(125, 42)
-Layout.CellPadding = UDim2.fromOffset(8, 8)
-Layout.SortOrder = Enum.SortOrder.LayoutOrder
-Layout.Parent = Content
-
---==================================================
--- COLOR BUTTONS
---==================================================
-
-local function CreateColorButton(data, order)
-	local Button = Instance.new("TextButton")
-
-	Button.LayoutOrder = order
-	Button.BackgroundColor3 = data.Color
-	Button.Text = data.Name
-	Button.TextColor3 = Color3.new(1, 1, 1)
-	Button.TextSize = 13
-	Button.Font = Enum.Font.GothamBold
-	Button.Parent = Content
-
-	local Corner = Instance.new("UICorner")
-	Corner.CornerRadius = UDim.new(0, 8)
-	Corner.Parent = Button
-
-	local Stroke = Instance.new("UIStroke")
-	Stroke.Thickness = 1
-	Stroke.Transparency = 0.5
-	Stroke.Parent = Button
-
-	Button.MouseButton1Click:Connect(function()
-		currentColor = data
-		rainbowEnabled = false
-
-		ScanEffects()
-	end)
-end
-
-for i, data in ipairs(COLORS) do
-	CreateColorButton(data, i)
-end
-
---==================================================
--- RAINBOW BUTTON
---==================================================
-
-local RainbowButton = Instance.new("TextButton")
-RainbowButton.LayoutOrder = 100
-RainbowButton.BackgroundColor3 = Color3.fromRGB(90, 50, 160)
-RainbowButton.Text = "🌈 CẦU VỒNG"
-RainbowButton.TextColor3 = Color3.new(1, 1, 1)
-RainbowButton.TextSize = 13
-RainbowButton.Font = Enum.Font.GothamBold
-RainbowButton.Parent = Content
-
-local RainbowCorner = Instance.new("UICorner")
-RainbowCorner.CornerRadius = UDim.new(0, 8)
-RainbowCorner.Parent = RainbowButton
-
-RainbowButton.MouseButton1Click:Connect(function()
-	rainbowEnabled = not rainbowEnabled
-
-	if rainbowEnabled then
-		RainbowButton.Text = "🌈 RAINBOW: BẬT"
-	else
-		RainbowButton.Text = "🌈 CẦU VỒNG"
-	end
 end)
 
 --==================================================
--- SCAN BUTTON
+-- TỰ ĐỘNG QUÉT
 --==================================================
 
-local ScanButton = Instance.new("TextButton")
-ScanButton.LayoutOrder = 101
-ScanButton.BackgroundColor3 = Color3.fromRGB(45, 100, 180)
-ScanButton.Text = "🔄 QUÉT HIỆU ỨNG"
-ScanButton.TextColor3 = Color3.new(1, 1, 1)
-ScanButton.TextSize = 13
-ScanButton.Font = Enum.Font.GothamBold
-ScanButton.Parent = Content
+task.spawn(function()
 
-local ScanCorner = Instance.new("UICorner")
-ScanCorner.CornerRadius = UDim.new(0, 8)
-ScanCorner.Parent = ScanButton
+    while true do
 
-ScanButton.MouseButton1Click:Connect(function()
-	ScanEffects()
+        task.wait(CONFIG.ScanInterval)
+
+        if Open then
+            ScanEffects()
+        end
+
+    end
+
 end)
 
 --==================================================
--- HIDE MENU
+-- KHỞI ĐỘNG
 --==================================================
 
-Minimize.MouseButton1Click:Connect(function()
-	Main.Visible = false
-	OpenButton.Visible = true
-end)
-
-OpenButton.MouseButton1Click:Connect(function()
-	Main.Visible = true
-	OpenButton.Visible = false
-end)
-
-Close.MouseButton1Click:Connect(function()
-	Main.Visible = false
-	OpenButton.Visible = true
-end)
-
---==================================================
--- DRAG MENU
---==================================================
-
-local dragging = false
-local dragStart
-local startPos
-
-Header.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
-
-		dragging = true
-		dragStart = input.Position
-		startPos = Main.Position
-
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if not dragging then
-		return
-	end
-
-	if input.UserInputType == Enum.UserInputType.MouseMovement
-		or input.UserInputType == Enum.UserInputType.Touch then
-
-		local delta = input.Position - dragStart
-
-		Main.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
-	end
-end)
-
---==================================================
--- RESIZE HANDLE
---==================================================
-
-local Resize = Instance.new("TextButton")
-Resize.Size = UDim2.fromOffset(22, 22)
-Resize.Position = UDim2.new(1, -24, 1, -24)
-Resize.BackgroundTransparency = 1
-Resize.Text = "◢"
-Resize.TextColor3 = Color3.fromRGB(170, 170, 180)
-Resize.TextSize = 16
-Resize.Parent = Main
-
-local resizing = false
-local resizeStart
-local originalSize
-
-Resize.MouseButton1Down:Connect(function()
-	resizing = true
-	resizeStart = UserInputService:GetMouseLocation()
-	originalSize = Main.AbsoluteSize
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if not resizing then
-		return
-	end
-
-	if input.UserInputType == Enum.UserInputType.MouseMovement then
-		local mouse = UserInputService:GetMouseLocation()
-		local delta = mouse - resizeStart
-
-		local newX = math.clamp(
-			originalSize.X + delta.X,
-			CONFIG.MinSize.X,
-			CONFIG.MaxSize.X
-		)
-
-		local newY = math.clamp(
-			originalSize.Y + delta.Y,
-			CONFIG.MinSize.Y,
-			CONFIG.MaxSize.Y
-		)
-
-		Main.Size = UDim2.fromOffset(newX, newY)
-	end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		resizing = false
-	end
-end)
-
---==================================================
--- UPDATE CANVAS
---==================================================
-
-local function UpdateCanvas()
-	Content.CanvasSize = UDim2.fromOffset(
-		0,
-		Layout.AbsoluteContentSize.Y + 10
-	)
-end
-
-Layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(UpdateCanvas)
-UpdateCanvas()
-
---==================================================
--- RAINBOW LOOP
---==================================================
-
-local timer = 0
-
-RunService.Heartbeat:Connect(function(dt)
-	timer += dt
-
-	if timer >= CONFIG.ScanInterval then
-		timer = 0
-
-		if rainbowEnabled then
-			rainbowHue =
-				(rainbowHue + CONFIG.RainbowSpeed * CONFIG.ScanInterval)
-				% 1
-
-			ScanEffects()
-		end
-	end
-end)
-
---==================================================
--- AUTO RESCAN CHARACTER
---==================================================
-
-Player.CharacterAdded:Connect(function()
-	task.wait(1)
-	ScanEffects()
-end)
-
---==================================================
--- FIRST SCAN
---==================================================
-
-task.wait(1)
+CreateMenu()
 ScanEffects()
