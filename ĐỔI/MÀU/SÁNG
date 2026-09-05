@@ -1,382 +1,264 @@
 --============================================================
--- COLOR SWAP v4.0
--- TÍM 100% - KHÔNG MENU
--- CLIENT ONLY
+-- ColorSwap v4.0
+-- TÍM TRỨNG 100%
 --
--- Không tạo GUI
+-- Không menu
+-- Không GUI
 -- Không tạo Part mới
--- Không đổi màu nhân vật
--- Không đổi màu vũ khí
--- Không thay đổi người chơi khác
---
--- Mục tiêu:
--- Đỏ -> Tím
--- Cam -> Tím
--- Vàng -> Tím
--- Xanh -> Tím
--- Trắng -> Tím
--- Mọi màu của hiệu ứng -> Tím
+-- Không tạo bụi mới
+-- Không can thiệp vũ khí
+-- Không thay đổi nhân vật
+-- Không ảnh hưởng server/người chơi khác
+-- Tối ưu FPS
 --============================================================
 
-local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
-local LocalPlayer = Players.LocalPlayer
+local Player = Players.LocalPlayer
 
 --============================================================
--- CẤU HÌNH
+-- CẤU HÌNH TỐI ƯU
 --============================================================
 
 local CONFIG = {
+	-- Tím trứng chính
+	PurpleEgg = Color3.fromRGB(155, 70, 255),
 
-	-- Tím trứng / tím cà
-	PURPLE = Color3.fromRGB(
-		145,
-		55,
-		210
-	),
+	-- Tím sáng cho hiệu ứng phát sáng
+	PurpleLight = Color3.fromRGB(180, 95, 255),
 
-	-- Tím sáng hơn cho ánh sáng
-	LIGHT_PURPLE = Color3.fromRGB(
-		175,
-		75,
-		255
-	),
+	-- Chỉ xử lý hiệu ứng ở gần người chơi
+	MaxDistance = 150,
 
-	-- Khoảng cách xử lý
-	MAX_DISTANCE = 250,
+	-- Quét mới mỗi 1 giây
+	ScanRate = 1,
 
-	-- Quét hiệu ứng mới
-	SCAN_INTERVAL = 0.5,
+	-- Đổi màu cực ít lần/giây
+	-- Không dùng RenderStepped liên tục
+	UpdateRate = 0.12,
 
-	-- Không xử lý nhân vật
-	IGNORE_CHARACTER = true,
-
-	-- Không xử lý Tool / vũ khí
-	IGNORE_TOOLS = true,
+	-- Giới hạn hiệu ứng để bảo vệ FPS
+	MaxEffects = 180,
 }
 
 --============================================================
--- BỘ NHỚ ĐỐI TƯỢNG
+-- CACHE
 --============================================================
 
-local tracked = {}
+local Effects = {}
+local EffectCount = 0
 
 --============================================================
--- KIỂM TRA CÓ PHẢI NHÂN VẬT / VŨ KHÍ KHÔNG
+-- KIỂM TRA ĐỐI TƯỢNG
 --============================================================
 
-local function isIgnored(object)
+local function IsColorEffect(obj)
 
-	if not object then
-		return true
-	end
-
-	local current = object
-
-	while current and current ~= Workspace do
-
-		-- Không đổi nhân vật
-		if CONFIG.IGNORE_CHARACTER then
-
-			for _, player in ipairs(
-				Players:GetPlayers()
-			) do
-
-				if current == player.Character then
-					return true
-				end
-			end
-		end
-
-		-- Không đổi Tool
-		if CONFIG.IGNORE_TOOLS then
-
-			if current:IsA("Tool") then
-				return true
-			end
-		end
-
-		current = current.Parent
-	end
-
-	return false
+	return obj:IsA("ParticleEmitter")
+		or obj:IsA("Trail")
+		or obj:IsA("Beam")
+		or obj:IsA("PointLight")
+		or obj:IsA("SpotLight")
+		or obj:IsA("SurfaceLight")
 end
 
 --============================================================
--- KIỂM TRA HIỆU ỨNG
+-- LẤY VỊ TRÍ HIỆU ỨNG
 --============================================================
 
-local function isColorEffect(object)
+local function GetPosition(obj)
 
-	if not object then
-		return false
+	local parent = obj.Parent
+
+	if parent and parent:IsA("BasePart") then
+		return parent.Position
 	end
 
-	if isIgnored(object) then
-		return false
+	if parent and parent:IsA("Attachment") then
+
+		local part = parent.Parent
+
+		if part and part:IsA("BasePart") then
+			return part.Position
+		end
 	end
 
-	return (
-		object:IsA("ParticleEmitter")
-		or object:IsA("Trail")
-		or object:IsA("Beam")
-		or object:IsA("PointLight")
-		or object:IsA("SpotLight")
-		or object:IsA("SurfaceLight")
-		or object:IsA("Highlight")
-	)
+	return nil
 end
 
 --============================================================
--- KIỂM TRA KHOẢNG CÁCH
+-- CULLING
 --============================================================
 
-local function isNearPlayer(object)
+local function IsNearPlayer(obj)
 
-	local character =
-		LocalPlayer.Character
+	local character = Player.Character
 
 	if not character then
-		return true
+		return false
 	end
 
 	local root =
-		character:FindFirstChild(
-			"HumanoidRootPart"
-		)
+		character:FindFirstChild("HumanoidRootPart")
 
 	if not root then
-		return true
+		return false
 	end
 
-	local parent = object.Parent
+	local position = GetPosition(obj)
 
-	-- Nếu hiệu ứng nằm trực tiếp trên Part
-	if parent and parent:IsA("BasePart") then
-
-		return (
-			parent.Position -
-			root.Position
-		).Magnitude <=
-			CONFIG.MAX_DISTANCE
+	-- Không lấy được vị trí thì bỏ qua
+	if not position then
+		return false
 	end
 
-	-- Tìm Part gần nhất
-	local current = parent
+	local distance =
+		(position - root.Position).Magnitude
 
-	while current and current ~= Workspace do
+	return distance <= CONFIG.MaxDistance
+end
 
-		if current:IsA("BasePart") then
+--============================================================
+-- ĐĂNG KÝ
+--============================================================
 
-			return (
-				current.Position -
-				root.Position
-			).Magnitude <=
-				CONFIG.MAX_DISTANCE
+local function Register(obj)
+
+	if EffectCount >= CONFIG.MaxEffects then
+		return
+	end
+
+	if Effects[obj] then
+		return
+	end
+
+	if not IsColorEffect(obj) then
+		return
+	end
+
+	Effects[obj] = true
+	EffectCount += 1
+end
+
+--============================================================
+-- QUÉT HIỆU ỨNG
+--============================================================
+
+local function Scan()
+
+	-- Ưu tiên hiệu ứng trong nhân vật
+	local character = Player.Character
+
+	if character then
+
+		for _, obj in ipairs(
+			character:GetDescendants()
+		) do
+
+			if IsColorEffect(obj) then
+				Register(obj)
+			end
 		end
-
-		current = current.Parent
 	end
 
-	return true
-end
-
---============================================================
--- TẠO COLOR SEQUENCE TÍM 100%
---
--- Điểm quan trọng:
--- Không chỉ đổi một màu.
--- Toàn bộ các keypoint đều thành tím.
---
--- Ví dụ:
--- Đỏ -> Cam -> Vàng
--- trở thành:
--- Tím -> Tím -> Tím
---
--- Nhưng vẫn giữ nguyên độ trong suốt của từng điểm.
---============================================================
-
-local function purpleSequence(oldSequence)
-
-	if not oldSequence then
-		return ColorSequence.new(
-			CONFIG.PURPLE
-		)
-	end
-
-	local keypoints = {}
-
-	for _, keypoint in ipairs(
-		oldSequence.Keypoints
+	-- Sau đó mới kiểm tra Workspace
+	for _, obj in ipairs(
+		workspace:GetDescendants()
 	) do
 
-		table.insert(
-			keypoints,
-			ColorSequenceKeypoint.new(
-				keypoint.Time,
-				CONFIG.PURPLE
-			)
-		)
-	end
-
-	return ColorSequence.new(keypoints)
-end
-
---============================================================
--- ĐỔI MÀU PARTICLE
---============================================================
-
-local function changeParticle(object)
-
-	if not object:IsA("ParticleEmitter") then
-		return
-	end
-
-	-- Ép toàn bộ ColorSequence thành tím
-	object.Color =
-		purpleSequence(object.Color)
-
-	tracked[object] = true
-end
-
---============================================================
--- ĐỔI MÀU TRAIL
---============================================================
-
-local function changeTrail(object)
-
-	if not object:IsA("Trail") then
-		return
-	end
-
-	object.Color =
-		purpleSequence(object.Color)
-
-	tracked[object] = true
-end
-
---============================================================
--- ĐỔI MÀU BEAM
---============================================================
-
-local function changeBeam(object)
-
-	if not object:IsA("Beam") then
-		return
-	end
-
-	object.Color =
-		purpleSequence(object.Color)
-
-	tracked[object] = true
-end
-
---============================================================
--- ĐỔI MÀU LIGHT
---============================================================
-
-local function changeLight(object)
-
-	if not (
-		object:IsA("PointLight")
-		or object:IsA("SpotLight")
-		or object:IsA("SurfaceLight")
-	) then
-
-		return
-	end
-
-	object.Color =
-		CONFIG.LIGHT_PURPLE
-
-	tracked[object] = true
-end
-
---============================================================
--- ĐỔI MÀU HIGHLIGHT
---============================================================
-
-local function changeHighlight(object)
-
-	if not object:IsA("Highlight") then
-		return
-	end
-
-	object.FillColor =
-		CONFIG.PURPLE
-
-	object.OutlineColor =
-		CONFIG.LIGHT_PURPLE
-
-	tracked[object] = true
-end
-
---============================================================
--- HÀM ĐỔI MÀU CHÍNH
---============================================================
-
-local function convertToPurple(object)
-
-	if not object
-		or not object.Parent then
-
-		return
-	end
-
-	if isIgnored(object) then
-		return
-	end
-
-	if not isNearPlayer(object) then
-		return
-	end
-
-	if object:IsA("ParticleEmitter") then
-
-		changeParticle(object)
-
-	elseif object:IsA("Trail") then
-
-		changeTrail(object)
-
-	elseif object:IsA("Beam") then
-
-		changeBeam(object)
-
-	elseif object:IsA("PointLight")
-		or object:IsA("SpotLight")
-		or object:IsA("SurfaceLight") then
-
-		changeLight(object)
-
-	elseif object:IsA("Highlight") then
-
-		changeHighlight(object)
-	end
-end
-
---============================================================
--- QUÉT TOÀN BỘ HIỆU ỨNG
---============================================================
-
-local function scanWorkspace()
-
-	local amount = 0
-
-	for _, object in ipairs(
-		Workspace:GetDescendants()
-	) do
-
-		if amount >= 1000 then
+		if EffectCount >= CONFIG.MaxEffects then
 			break
 		end
 
-		if isColorEffect(object) then
+		if IsColorEffect(obj)
+			and IsNearPlayer(obj) then
 
-			convertToPurple(object)
+			Register(obj)
+		end
+	end
+end
 
-			amount += 1
+--============================================================
+-- DỌN CACHE
+--============================================================
+
+local function Clean()
+
+	for obj in pairs(Effects) do
+
+		if not obj
+			or not obj.Parent then
+
+			Effects[obj] = nil
+			EffectCount -= 1
+		end
+	end
+
+	if EffectCount < 0 then
+		EffectCount = 0
+	end
+end
+
+--============================================================
+-- ÁP DỤNG TÍM 100%
+--============================================================
+
+local function ApplyPurple(obj)
+
+	if not obj
+		or not obj.Parent then
+		return
+	end
+
+	if not IsNearPlayer(obj) then
+		return
+	end
+
+	-- PARTICLE
+	if obj:IsA("ParticleEmitter") then
+
+		obj.Color =
+			ColorSequence.new(
+				CONFIG.PurpleEgg
+			)
+
+	-- TRAIL
+	elseif obj:IsA("Trail") then
+
+		obj.Color =
+			ColorSequence.new(
+				CONFIG.PurpleEgg
+			)
+
+	-- BEAM
+	elseif obj:IsA("Beam") then
+
+		obj.Color =
+			ColorSequence.new(
+				CONFIG.PurpleEgg
+			)
+
+	-- LIGHT
+	elseif obj:IsA("PointLight")
+		or obj:IsA("SpotLight")
+		or obj:IsA("SurfaceLight") then
+
+		obj.Color =
+			CONFIG.PurpleLight
+	end
+end
+
+--============================================================
+-- ĐỔI MÀU TOÀN BỘ CACHE
+--============================================================
+
+local function Update()
+
+	for obj in pairs(Effects) do
+
+		if obj and obj.Parent then
+			ApplyPurple(obj)
 		end
 	end
 end
@@ -385,80 +267,68 @@ end
 -- HIỆU ỨNG MỚI XUẤT HIỆN
 --============================================================
 
-Workspace.DescendantAdded:Connect(
-	function(object)
+workspace.DescendantAdded:Connect(function(obj)
 
-		if isColorEffect(object) then
+	if IsColorEffect(obj) then
 
-			-- Chờ game hoàn thành việc thiết lập
-			-- ParticleEmitter / Beam / Trail
-			task.defer(function()
+		-- Không xử lý ngay lập tức hàng loạt
+		task.defer(function()
 
-				convertToPurple(object)
+			if IsNearPlayer(obj) then
+				Register(obj)
+				ApplyPurple(obj)
+			end
 
-			end)
-		end
-	end
-)
-
---============================================================
--- CHARACTER ADDED
---============================================================
-
-LocalPlayer.CharacterAdded:Connect(
-	function()
-
-		-- Không đổi nhân vật.
-		-- Chỉ quét lại Workspace sau khi hồi sinh
-		-- để bắt các effect bên ngoài nhân vật.
-
-		task.wait(0.5)
-
-		scanWorkspace()
-	end
-)
-
---============================================================
--- QUÉT LIÊN TỤC
---============================================================
-
-task.spawn(function()
-
-	while true do
-
-		scanWorkspace()
-
-		task.wait(
-			CONFIG.SCAN_INTERVAL
-		)
+		end)
 	end
 end)
 
 --============================================================
--- KIỂM TRA ĐỐI TƯỢNG ĐÃ BỊ XÓA
+-- KHI NHÂN VẬT HỒI SINH
+--============================================================
+
+Player.CharacterAdded:Connect(function(character)
+
+	task.wait(0.5)
+
+	for _, obj in ipairs(
+		character:GetDescendants()
+	) do
+
+		if IsColorEffect(obj) then
+			Register(obj)
+		end
+	end
+
+	Update()
+end)
+
+--============================================================
+-- QUÉT ĐỊNH KỲ
 --============================================================
 
 task.spawn(function()
 
 	while true do
 
-		for object in pairs(tracked) do
+		Clean()
+		Scan()
 
-			if not object
-				or not object.Parent then
+		task.wait(CONFIG.ScanRate)
+	end
+end)
 
-				tracked[object] = nil
-			else
+--============================================================
+-- CẬP NHẬT MÀU
+--============================================================
 
-				-- Ép lại màu.
-				--
-				-- Một số hệ thống hiệu ứng có thể
-				-- tự đặt màu lại sau khi tạo.
-				convertToPurple(object)
-			end
-		end
+task.spawn(function()
 
-		task.wait(0.15)
+	while true do
+
+		Update()
+
+		task.wait(CONFIG.UpdateRate)
 	end
 end)
 
@@ -466,10 +336,9 @@ end)
 -- KHỞI ĐỘNG NGAY
 --============================================================
 
-task.wait(0.2)
+task.wait(0.5)
 
-scanWorkspace()
+Scan()
+Update()
 
-print(
-	"[ColorSwap v4.0] TẤT CẢ HIỆU ỨNG ĐÃ ĐƯỢC ÉP SANG TÍM."
-)
+print("ColorSwap v4.0: TÍM TRỨNG 100% đã bật.")
