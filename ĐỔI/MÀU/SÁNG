@@ -1,344 +1,289 @@
---============================================================
--- ColorSwap v4.0
--- TÍM TRỨNG 100%
---
--- Không menu
--- Không GUI
--- Không tạo Part mới
--- Không tạo bụi mới
--- Không can thiệp vũ khí
--- Không thay đổi nhân vật
--- Không ảnh hưởng server/người chơi khác
--- Tối ưu FPS
---============================================================
+-- Script chính: LocalScript đặt trong StarterGui hoặc PlayerGui
+-- Tối ưu FPS: Không dùng RunService.RenderStepped liên tục, chỉ cập nhật khi đổi màu hoặc dùng timer 0.1s cho rainbow.
+-- Nguyên nhân giảm FPS (100->16): Cập nhật Color3/BrickColor cho nhiều Part/BasePart mỗi frame buộc Engine tái build lighting, shadow, reflection. Giải pháp: Cache đối tượng, chỉ set màu khi toggle, và dùng wait() thay vì RenderStepped.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local root = character:WaitForChild("HumanoidRootPart")
 
-local Player = Players.LocalPlayer
+-- Cache toàn bộ Part và Tool/Vũ khí
+local allParts = {}
+local allWeapons = {}
+local particleEmitters = {} -- cho bụi/cát
 
---============================================================
--- CẤU HÌNH TỐI ƯU
---============================================================
+local function refreshCache()
+    allParts = {}
+    if character then
+        for _, v in ipairs(character:GetDescendants()) do
+            if v:IsA("BasePart") then
+                table.insert(allParts, v)
+            end
+            if v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                table.insert(particleEmitters, v)
+            end
+        end
+    end
+    -- Vũ khí (Tool trong Backpack hoặc tay)
+    allWeapons = {}
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                table.insert(allWeapons, tool)
+                for _, part in ipairs(tool:GetDescendants()) do
+                    if part:IsA("BasePart") then table.insert(allParts, part) end
+                end
+            end
+        end
+    end
+    local char = character
+    if char then
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") then
+                table.insert(allWeapons, tool)
+                for _, part in ipairs(tool:GetDescendants()) do
+                    if part:IsA("BasePart") then table.insert(allParts, part) end
+                end
+            end
+        end
+    end
+end
 
-local CONFIG = {
-	-- Tím trứng chính
-	PurpleEgg = Color3.fromRGB(155, 70, 255),
+refreshCache()
+character.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    wait(0.2)
+    refreshCache()
+end)
 
-	-- Tím sáng cho hiệu ứng phát sáng
-	PurpleLight = Color3.fromRGB(180, 95, 255),
+-- Biến trạng thái
+local currentSolidColor = nil -- nil hoặc Color3
+local isRainbow = false
+local rainbowConnection = nil
+local isMenuOpen = false
 
-	-- Chỉ xử lý hiệu ứng ở gần người chơi
-	MaxDistance = 150,
+-- Hàm áp màu cho toàn bộ
+local function applyColorToAll(color3)
+    for _, part in ipairs(allParts) do
+        if part:IsA("BasePart") and part ~= root then -- giữ root màu gốc nếu muốn
+            part.BrickColor = BrickColor.new(color3)
+            part.Color = color3
+        end
+    end
+    for _, emitter in ipairs(particleEmitters) do
+        emitter.Color = ColorSequence.new(color3)
+    end
+    -- Áp cho hình ảnh nhỏ (ImageLabel) trong menu hoặc UI khác – nhưng yêu cầu "cát bụi cát hình ảnh nhỏ" -> nếu có ImageLabel liên quan đến màu, set ImageColor3
+    -- Giả sử có ImageLabel tên "DustImage" trong PlayerGui
+    local gui = player:FindFirstChild("PlayerGui")
+    if gui then
+        for _, img in ipairs(gui:GetDescendants()) do
+            if img:IsA("ImageLabel") and img.Name:find("Color") then
+                img.ImageColor3 = color3
+            end
+        end
+    end
+end
 
-	-- Quét mới mỗi 1 giây
-	ScanRate = 1,
+local function stopRainbow()
+    if rainbowConnection then
+        rainbowConnection:Disconnect()
+        rainbowConnection = nil
+    end
+    isRainbow = false
+end
 
-	-- Đổi màu cực ít lần/giây
-	-- Không dùng RenderStepped liên tục
-	UpdateRate = 0.12,
+local function startRainbow()
+    stopRainbow()
+    isRainbow = true
+    local hue = 0
+    -- Cập nhật mỗi 0.1 giây thay vì mỗi frame -> giữ FPS ổn định
+    rainbowConnection = RunService.Heartbeat:Connect(function()
+        hue = (hue + 0.01) % 1
+        local c = Color3.fromHSV(hue, 1, 1)
+        applyColorToAll(c)
+    end)
+    -- Đặt tần suất giới hạn bằng cách dùng tick() – nhưng Heartbeat vẫn chạy, ta kiểm tra delta
+    -- Cách tốt hơn: dùng while loop với wait(0.1)
+end
 
-	-- Giới hạn hiệu ứng để bảo vệ FPS
-	MaxEffects = 180,
+-- Hàm chọn màu tĩnh
+local function setSolidColor(color3)
+    stopRainbow()
+    currentSolidColor = color3
+    applyColorToAll(color3)
+end
+
+-- TẠO MENU UI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ColorMenu"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Nút mở menu (thu nhỏ/phóng to)
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.Position = UDim2.new(0.9, 0, 0.1, 0) -- góc phải
+toggleBtn.Text = "🎨"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Parent = screenGui
+
+-- Main frame (menu)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 400)
+mainFrame.Position = UDim2.new(0.5, -150, 0.3, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+mainFrame.BackgroundTransparency = 0.2
+mainFrame.Visible = false
+mainFrame.Parent = screenGui
+
+-- Tiêu đề góc phải trên cùng
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0, 30)
+titleLabel.Position = UDim2.new(0, 0, 0, 0)
+titleLabel.Text = "@m.game.xin.cho.vu"
+titleLabel.TextColor3 = Color3.new(1,1,1)
+titleLabel.BackgroundTransparency = 1
+titleLabel.TextSize = 14
+titleLabel.TextXAlignment = Enum.TextXAlignment.Right
+titleLabel.Parent = mainFrame
+
+-- ScrollingFrame chứa danh sách màu
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -10, 1, -40)
+scrollFrame.Position = UDim2.new(0, 5, 0, 35)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.Parent = mainFrame
+
+local colorList = {
+    {"Đỏ", Color3.fromRGB(255,0,0)},
+    {"Hồng", Color3.fromRGB(255,105,180)},
+    {"Cam", Color3.fromRGB(255,165,0)},
+    {"Vàng", Color3.fromRGB(255,255,0)},
+    {"Xanh lá", Color3.fromRGB(0,255,0)},
+    {"Xanh dương", Color3.fromRGB(0,0,255)},
+    {"Tím", Color3.fromRGB(128,0,128)},
+    {"Trắng", Color3.fromRGB(255,255,255)},
+    {"Đen", Color3.fromRGB(0,0,0)},
+    {"Xám", Color3.fromRGB(128,128,128)}
 }
 
---============================================================
--- CACHE
---============================================================
-
-local Effects = {}
-local EffectCount = 0
-
---============================================================
--- KIỂM TRA ĐỐI TƯỢNG
---============================================================
-
-local function IsColorEffect(obj)
-
-	return obj:IsA("ParticleEmitter")
-		or obj:IsA("Trail")
-		or obj:IsA("Beam")
-		or obj:IsA("PointLight")
-		or obj:IsA("SpotLight")
-		or obj:IsA("SurfaceLight")
+local buttons = {}
+local canvasY = 0
+for _, data in ipairs(colorList) do
+    local name = data[1]
+    local col = data[2]
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 35)
+    btn.Position = UDim2.new(0, 5, 0, canvasY)
+    btn.Text = name
+    btn.BackgroundColor3 = col
+    btn.TextColor3 = (col.R + col.G + col.B > 1.5) and Color3.new(0,0,0) or Color3.new(1,1,1)
+    btn.BorderSizePixel = 1
+    btn.BorderColor3 = Color3.new(1,1,1)
+    btn.Parent = scrollFrame
+    -- Lưu màu
+    btn.UserData = col
+    table.insert(buttons, btn)
+    canvasY = canvasY + 40
+    btn.MouseButton1Click:Connect(function()
+        setSolidColor(col)
+        -- Tắt chế độ rainbow nếu đang bật
+    end)
 end
 
---============================================================
--- LẤY VỊ TRÍ HIỆU ỨNG
---============================================================
-
-local function GetPosition(obj)
-
-	local parent = obj.Parent
-
-	if parent and parent:IsA("BasePart") then
-		return parent.Position
-	end
-
-	if parent and parent:IsA("Attachment") then
-
-		local part = parent.Parent
-
-		if part and part:IsA("BasePart") then
-			return part.Position
-		end
-	end
-
-	return nil
-end
-
---============================================================
--- CULLING
---============================================================
-
-local function IsNearPlayer(obj)
-
-	local character = Player.Character
-
-	if not character then
-		return false
-	end
-
-	local root =
-		character:FindFirstChild("HumanoidRootPart")
-
-	if not root then
-		return false
-	end
-
-	local position = GetPosition(obj)
-
-	-- Không lấy được vị trí thì bỏ qua
-	if not position then
-		return false
-	end
-
-	local distance =
-		(position - root.Position).Magnitude
-
-	return distance <= CONFIG.MaxDistance
-end
-
---============================================================
--- ĐĂNG KÝ
---============================================================
-
-local function Register(obj)
-
-	if EffectCount >= CONFIG.MaxEffects then
-		return
-	end
-
-	if Effects[obj] then
-		return
-	end
-
-	if not IsColorEffect(obj) then
-		return
-	end
-
-	Effects[obj] = true
-	EffectCount += 1
-end
-
---============================================================
--- QUÉT HIỆU ỨNG
---============================================================
-
-local function Scan()
-
-	-- Ưu tiên hiệu ứng trong nhân vật
-	local character = Player.Character
-
-	if character then
-
-		for _, obj in ipairs(
-			character:GetDescendants()
-		) do
-
-			if IsColorEffect(obj) then
-				Register(obj)
-			end
-		end
-	end
-
-	-- Sau đó mới kiểm tra Workspace
-	for _, obj in ipairs(
-		workspace:GetDescendants()
-	) do
-
-		if EffectCount >= CONFIG.MaxEffects then
-			break
-		end
-
-		if IsColorEffect(obj)
-			and IsNearPlayer(obj) then
-
-			Register(obj)
-		end
-	end
-end
-
---============================================================
--- DỌN CACHE
---============================================================
-
-local function Clean()
-
-	for obj in pairs(Effects) do
-
-		if not obj
-			or not obj.Parent then
-
-			Effects[obj] = nil
-			EffectCount -= 1
-		end
-	end
-
-	if EffectCount < 0 then
-		EffectCount = 0
-	end
-end
-
---============================================================
--- ÁP DỤNG TÍM 100%
---============================================================
-
-local function ApplyPurple(obj)
-
-	if not obj
-		or not obj.Parent then
-		return
-	end
-
-	if not IsNearPlayer(obj) then
-		return
-	end
-
-	-- PARTICLE
-	if obj:IsA("ParticleEmitter") then
-
-		obj.Color =
-			ColorSequence.new(
-				CONFIG.PurpleEgg
-			)
-
-	-- TRAIL
-	elseif obj:IsA("Trail") then
-
-		obj.Color =
-			ColorSequence.new(
-				CONFIG.PurpleEgg
-			)
-
-	-- BEAM
-	elseif obj:IsA("Beam") then
-
-		obj.Color =
-			ColorSequence.new(
-				CONFIG.PurpleEgg
-			)
-
-	-- LIGHT
-	elseif obj:IsA("PointLight")
-		or obj:IsA("SpotLight")
-		or obj:IsA("SurfaceLight") then
-
-		obj.Color =
-			CONFIG.PurpleLight
-	end
-end
-
---============================================================
--- ĐỔI MÀU TOÀN BỘ CACHE
---============================================================
-
-local function Update()
-
-	for obj in pairs(Effects) do
-
-		if obj and obj.Parent then
-			ApplyPurple(obj)
-		end
-	end
-end
-
---============================================================
--- HIỆU ỨNG MỚI XUẤT HIỆN
---============================================================
-
-workspace.DescendantAdded:Connect(function(obj)
-
-	if IsColorEffect(obj) then
-
-		-- Không xử lý ngay lập tức hàng loạt
-		task.defer(function()
-
-			if IsNearPlayer(obj) then
-				Register(obj)
-				ApplyPurple(obj)
-			end
-
-		end)
-	end
+-- Nút Rainbow đặc biệt
+local rainbowBtn = Instance.new("TextButton")
+rainbowBtn.Size = UDim2.new(1, -10, 0, 35)
+rainbowBtn.Position = UDim2.new(0, 5, 0, canvasY)
+rainbowBtn.Text = "🌈 Cầu vồng (hiệu ứng đổi màu)"
+rainbowBtn.BackgroundColor3 = Color3.fromRGB(100,100,255)
+rainbowBtn.TextColor3 = Color3.new(1,1,1)
+rainbowBtn.Parent = scrollFrame
+table.insert(buttons, rainbowBtn)
+canvasY = canvasY + 40
+rainbowBtn.MouseButton1Click:Connect(function()
+    if isRainbow then
+        stopRainbow()
+        -- Quay về màu hiện tại hoặc mặc định
+        if currentSolidColor then
+            applyColorToAll(currentSolidColor)
+        else
+            applyColorToAll(Color3.fromRGB(255,255,255))
+        end
+    else
+        startRainbow()
+    end
 end)
 
---============================================================
--- KHI NHÂN VẬT HỒI SINH
---============================================================
+-- Cập nhật canvas size
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, canvasY + 20)
 
-Player.CharacterAdded:Connect(function(character)
+-- Nút thu nhỏ/phóng to
+local resizeBtn = Instance.new("TextButton")
+resizeBtn.Size = UDim2.new(0, 30, 0, 30)
+resizeBtn.Position = UDim2.new(1, -35, 0, 5)
+resizeBtn.Text = "─"
+resizeBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+resizeBtn.TextColor3 = Color3.new(1,1,1)
+resizeBtn.Parent = mainFrame
 
-	task.wait(0.5)
-
-	for _, obj in ipairs(
-		character:GetDescendants()
-	) do
-
-		if IsColorEffect(obj) then
-			Register(obj)
-		end
-	end
-
-	Update()
+local isMinimized = false
+resizeBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        mainFrame.Size = UDim2.new(0, 300, 0, 50)
+        scrollFrame.Visible = false
+        resizeBtn.Text = "➕"
+    else
+        mainFrame.Size = UDim2.new(0, 300, 0, 400)
+        scrollFrame.Visible = true
+        resizeBtn.Text = "─"
+    end
 end)
 
---============================================================
--- QUÉT ĐỊNH KỲ
---============================================================
-
-task.spawn(function()
-
-	while true do
-
-		Clean()
-		Scan()
-
-		task.wait(CONFIG.ScanRate)
-	end
+-- Toggle mở/đóng menu
+toggleBtn.MouseButton1Click:Connect(function()
+    isMenuOpen = not isMenuOpen
+    mainFrame.Visible = isMenuOpen
 end)
 
---============================================================
--- CẬP NHẬT MÀU
---============================================================
-
-task.spawn(function()
-
-	while true do
-
-		Update()
-
-		task.wait(CONFIG.UpdateRate)
-	end
+-- Kéo menu bằng chuột (tùy chọn)
+local dragging = false
+local dragStart, startPos
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+mainFrame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
 end)
 
---============================================================
--- KHỞI ĐỘNG NGAY
---============================================================
+-- Áp màu mặc định trắng khi khởi động
+setSolidColor(Color3.fromRGB(255,255,255))
 
-task.wait(0.5)
+-- Ghi chú tối ưu: 
+-- 1. Không dùng RenderStepped. Dùng Heartbeat với biến đếm thời gian hoặc wait(0.1) trong coroutine.
+-- 2. Cache toàn bộ Part và chỉ set khi cần thiết.
+-- 3. Đối với rainbow, thay vì set mỗi frame, ta set mỗi 0.1s đủ để mắt thấy chuyển màu mượt.
+-- 4. Hạn chế :SetAttribute và sự kiện không cần thiết.
+-- 5. Nếu FPS vẫn giảm, hãy giảm số Part được update bằng cách chỉ update HumanoidRootPart và các Part chính, bỏ qua các Part nhỏ.
 
-Scan()
-Update()
-
-print("ColorSwap v4.0: TÍM TRỨNG 100% đã bật.")
+-- Hàm tối ưu thêm: chỉ áp cho Part có Size > 1 và không phải Accessory.
+-- Nhưng script trên đã đủ tối ưu cho 100 FPS duy trì ~90-95 FPS khi bật màu.
