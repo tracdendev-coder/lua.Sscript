@@ -1,522 +1,854 @@
 --[[
     ================================================================
-    HỆ THỐNG BẢNG TÙY CHỈNH MÀU SẮC CHUYÊN NGHIỆP (STYLE BLOX FRUITS)
-    Giao diện & Logic tối ưu hóa hiệu năng cao (Zero FPS Lag)
-    Ghi danh tác quyền: @m.game.xin.cho.vu
+    HE THONG BANG TUY CHINH MAU SAC & TOI UU HIEU UNG (BLOX FRUITS)
+    Tac gia ban quyền UI: @m.game.xin.cho.vu
+    Ngon ngu: 100% Tieng Viet
+    Toi uu: Batching, Pooling, Event-Driven Dynamic FPS Control
     ================================================================
 --]]
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 --------------------------------------------------------------------------------
--- 1. BẢNG MÀU CHUẨN TIẾNG VIỆT
+-- 1. HE THONG DULIEU & DONG BO (CONFIGURATION & STATE MANAGEMENT)
 --------------------------------------------------------------------------------
+
 local COLOR_PALETTE = {
-	["Đỏ"]        = Color3.fromRGB(255, 45, 45),
-	["Hồng"]      = Color3.fromRGB(255, 105, 180),
-	["Cam"]       = Color3.fromRGB(255, 140, 0),
-	["Vàng"]      = Color3.fromRGB(255, 215, 0),
-	["Vàng kim"]  = Color3.fromRGB(212, 175, 55),
-	["Xanh lá"]   = Color3.fromRGB(50, 205, 50),
-	["Xanh lam"]  = Color3.fromRGB(0, 230, 230),
-	["Xanh dương"]= Color3.fromRGB(30, 144, 255),
-	["Tím"]       = Color3.fromRGB(153, 50, 204),
-	["Trắng"]     = Color3.fromRGB(255, 255, 255),
-	["Bạc"]       = Color3.fromRGB(192, 192, 192),
-	["Xám"]       = Color3.fromRGB(128, 128, 128),
-	["Đen"]       = Color3.fromRGB(30, 30, 30),
-	["Nâu"]       = Color3.fromRGB(139, 69, 19),
-	["Cầu vồng"]   = Color3.fromRGB(255, 255, 255) -- Xử lý bằng Rainbow Engine
+    ["Đỏ"]          = Color3.fromRGB(255, 50, 50),
+    ["Hồng"]        = Color3.fromRGB(255, 105, 180),
+    ["Cam"]         = Color3.fromRGB(255, 140, 0),
+    ["Vàng"]        = Color3.fromRGB(255, 215, 0),
+    ["Vàng Kim"]    = Color3.fromRGB(212, 175, 55),
+    ["Xanh Lá"]     = Color3.fromRGB(50, 205, 50),
+    ["Xanh Lam"]    = Color3.fromRGB(0, 255, 255),
+    ["Xanh Dương"]  = Color3.fromRGB(30, 144, 255),
+    ["Tím"]         = Color3.fromRGB(138, 43, 226),
+    ["Trắng"]       = Color3.fromRGB(255, 255, 255),
+    ["Bạc"]         = Color3.fromRGB(192, 192, 192),
+    ["Xám"]         = Color3.fromRGB(128, 128, 128),
+    ["Đen"]         = Color3.fromRGB(30, 30, 30),
+    ["Nâu"]         = Color3.fromRGB(139, 69, 19),
+    ["Cầu Vồng"]    = "RAINBOW"
+}
+
+local CONFIG = {
+    ApplyToAll = false,
+    GlobalColor = "Xanh Dương",
+    RainbowMode = "SÁNG", -- OFF, SLOW, MEDIUM, FAST, SKILL
+    RainbowSpeed = 1,
+    QualityLevel = "CÂN BẰNG", -- CAO, CÂN BẰNG, TIẾT KIỆM FPS, TỰ ĐỘNG
+    AutoOptimize = true,
+    Scope = "NHÂN VẬT VÀ HIỆU ỨNG", -- ONLY_ME, ME_AND_EFFECTS, SEPARATE, ALL
+    ShowOtherPlayers = false,
+    
+    Groups = {
+        ["NHÂN VẬT"]         = { Active = true, Color = "Xanh Dương", Rainbow = false },
+        ["CÁT / BỤI / HẠT"]  = { Active = true, Color = "Cam", Rainbow = false },
+        ["HIỆU ỨNG KỸ NĂNG"] = { Active = true, Color = "Tím", Rainbow = false },
+        ["HIỆU ỨNG DI CHUYỂN"]= { Active = true, Color = "Xanh Lam", Rainbow = false },
+        ["HIỆU ỨNG TẤN CÔNG"] = { Active = true, Color = "Đỏ", Rainbow = false },
+        ["VŨ KHÍ"]          = { Active = true, Color = "Hồng", Rainbow = false },
+        ["NGƯỜI CHƠI KHÁC"]  = { Active = false, Color = "Trắng", Rainbow = false },
+    }
+}
+
+-- Registry lưu trữ các Object đang được quản lý màu sắc (Tránh Leak Memory)
+local ManagedObjects = {} -- [Instance] = { OriginalColor = Sequence/Color, Group = "NHÂN VẬT" }
+local ManagedCount = 0
+
+-- Dynamic FPS Monitor Variable
+local FPSMetrics = {
+    CurrentFPS = 60,
+    AverageFPS = 60,
+    FrameHistory = {},
+    LastOptimized = os.clock()
 }
 
 --------------------------------------------------------------------------------
--- 2. DỮ LIỆU CẤU HÌNH HỆ THỐNG
+-- 2. LÒNG TÓI UƯU VÀ XỬ LÝ HIỆU NĂNG (CORE OPTIMIZATION ENGINE)
 --------------------------------------------------------------------------------
-local State = {
-	MasterToggle = true,
-	ApplyAllColor = "Đỏ",
-	ApplyAllActive = false,
-	
-	-- Từng nhóm màu riêng biệt
-	Groups = {
-		["NHÂN VẬT"] = { Color = "Tím", Active = true, Rainbow = false },
-		["CÁT / BỤI / HẠT"] = { Color = "Đỏ", Active = true, Rainbow = false },
-		["HIỆU ỨNG KỸ NĂNG"] = { Color = "Xanh dương", Active = true, Rainbow = false },
-		["HIỆU ỨNG DI CHUYỂN"] = { Color = "Xanh lam", Active = true, Rainbow = false },
-		["HIỆU ỨNG TẤN CÔNG"] = { Color = "Cam", Active = true, Rainbow = false },
-		["VŨ KHÍ"] = { Color = "Hồng", Active = true, Rainbow = false },
-	},
 
-	Scope = "Nhân vật và hiệu ứng của tôi", -- Options: Chỉ nhân vật của tôi / Tất cả
-	RainbowSpeed = 1.0,
-	RainbowMode = "Thời gian", -- Thời gian / Kỹ năng
-	Quality = "CAO", -- CAO / CÂN BẰNG / TIẾT KIỆM FPS / TỰ ĐỘNG
-	AutoOptimize = true,
+local PerformanceEngine = {}
 
-	-- Số liệu Monitor (Performance)
-	FPS = 60,
-	ManagedObjectsCount = 0
-}
-
---------------------------------------------------------------------------------
--- 3. CORE MANAGEMENT & OPTIMIZATION ENGINE
---------------------------------------------------------------------------------
-local ManagedObjects = {} -- Cache danh sách Instance -> {OriginalColor, OriginalSequence, Group, Instance}
-local OriginalProperties = {}
-
-local SystemEngine = {}
-
--- Lưu trữ thuộc tính gốc
-local function BackupOriginal(inst)
-	if OriginalProperties[inst] then return end
-	local orig = {}
-	if inst:IsA("ParticleEmitter") then
-		orig.Color = inst.Color
-	elseif inst:IsA("Beam") or inst:IsA("Trail") then
-		orig.Color = inst.Color
-	elseif inst:IsA("Light") then
-		orig.Color = inst.Color
-	elseif inst:IsA("BasePart") then
-		orig.Color = inst.Color
-	end
-	OriginalProperties[inst] = orig
+function PerformanceEngine.GetColorValue(colorName, hueShift)
+    if colorName == "Cầu Vồng" or colorName == "RAINBOW" then
+        return Color3.fromHSV(hueShift or ((os.clock() * CONFIG.RainbowSpeed % 5) / 5), 1, 1)
+    end
+    return COLOR_PALETTE[colorName] or Color3.fromRGB(255, 255, 255)
 end
 
--- Phân loại Instance thuộc Nhóm nào
-local function CategorizeInstance(inst)
-	local name = inst.Name:lower()
-	
-	if name:find("sand") or name:find("dust") or name:find("particle") or name:find("particleemitter") or name:find("bui") or name:find("cat") then
-		return "CÁT / BỤI / HẠT"
-	elseif name:find("trail") or name:find("dash") or name:find("move") or name:find("dichuyen") then
-		return "HIỆU ỨNG DI CHUYỂN"
-	elseif name:find("slash") or name:find("hit") or name:find("attack") or name:find("tancong") then
-		return "HIỆU ỨNG TẤN CÔNG"
-	elseif name:find("skill") or name:find("magic") or name:find("aura") or name:find("kynang") then
-		return "HIỆU ỨNG KỸ NĂNG"
-	elseif inst:IsDescendantOf(LocalPlayer.Character) then
-		if inst:FindFirstAncestorOfClass("Tool") or name:find("sword") or name:find("weapon") or name:find("vukhi") then
-			return "VŨ KHÍ"
-		else
-			return "NHÂN VẬT"
-		end
-	end
-	return "HIỆU ỨNG KỸ NĂNG" -- Mặc định
+function PerformanceEngine.ApplyColorToObject(inst, colorVal)
+    if not inst or not inst.Parent then return end
+    
+    pcall(function()
+        if inst:IsA("ParticleEmitter") then
+            inst.Color = ColorSequence.new(colorVal)
+        elseif inst:IsA("Trail") then
+            inst.Color = ColorSequence.new(colorVal)
+        elseif inst:IsA("Beam") then
+            inst.Color = ColorSequence.new(colorVal)
+        elseif inst:IsA("Highlight") then
+            inst.FillColor = colorVal
+            inst.OutlineColor = colorVal
+        elseif inst:IsA("Light") then -- PointLight, SpotLight, SurfaceLight
+            inst.Color = colorVal
+        elseif inst:IsA("BasePart") and inst.Parent:FindFirstChildOfClass("Humanoid") == nil then
+            -- Không tô màu trực tiếp lên BodyParts của Character để tránh hỏng Outfit
+            inst.Color = colorVal
+        end
+    end)
 end
 
--- Thêm đối tượng vào danh sách quản lý
-function SystemEngine.RegisterInstance(inst)
-	if not inst or not inst.Parent then return end
-	if ManagedObjects[inst] then return end
-	
-	-- Chỉ chấp nhận loại đối tượng hiển thị được phép
-	if not (inst:IsA("ParticleEmitter") or inst:IsA("Beam") or inst:IsA("Trail") or inst:IsA("Light")) then
-		return
-	end
+function PerformanceEngine.RegisterInstance(inst, group)
+    if ManagedObjects[inst] or not inst then return end
+    
+    -- Lưu lại trạng thái ban đầu để Khôi Phục Mặc Định
+    local origColor = nil
+    pcall(function()
+        if inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") then
+            origColor = inst.Color
+        elseif inst:IsA("Highlight") then
+            origColor = inst.FillColor
+        elseif inst:IsA("Light") or inst:IsA("BasePart") then
+            origColor = inst.Color
+        end
+    end)
 
-	BackupOriginal(inst)
-	local group = CategorizeInstance(inst)
-
-	ManagedObjects[inst] = {
-		Instance = inst,
-		Group = group
-	}
+    if origColor then
+        ManagedObjects[inst] = {
+            OriginalColor = origColor,
+            Group = group
+        }
+        ManagedCount = ManagedCount + 1
+        
+        -- Cập nhật màu ngay lập tức
+        local targetColorName = CONFIG.ApplyToAll and CONFIG.GlobalColor or CONFIG.Groups[group].Color
+        local cVal = PerformanceEngine.GetColorValue(targetColorName)
+        PerformanceEngine.ApplyColorToObject(inst, cVal)
+    end
 end
 
--- Xóa đối tượng chết/bị hủy
-function SystemEngine.SweepDeadObjects()
-	local count = 0
-	for inst, _ in pairs(ManagedObjects) do
-		if not inst or not inst.Parent then
-			ManagedObjects[inst] = nil
-			OriginalProperties[inst] = nil
-		else
-			count = count + 1
-		end
-	end
-	State.ManagedObjectsCount = count
+function PerformanceEngine.UnregisterInstance(inst)
+    if ManagedObjects[inst] then
+        ManagedObjects[inst] = nil
+        ManagedCount = math.max(0, ManagedCount - 1)
+    end
 end
 
--- Đổi màu trực tiếp lên Instance mà không tạo mới
-function SystemEngine.ApplyColorToInstance(inst, color3)
-	if not inst or not inst.Parent then return end
-	
-	if inst:IsA("ParticleEmitter") or inst:IsA("Beam") or inst:IsA("Trail") then
-		inst.Color = ColorSequence.new(color3)
-	elseif inst:IsA("Light") then
-		inst.Color = color3
-	end
-end
-
--- Khôi phục màu gốc cho Instance
-function SystemEngine.RestoreInstance(inst)
-	local orig = OriginalProperties[inst]
-	if not orig then return end
-	if inst:IsA("ParticleEmitter") or inst:IsA("Beam") or inst:IsA("Trail") then
-		if orig.Color then inst.Color = orig.Color end
-	elseif inst:IsA("Light") then
-		if orig.Color then inst.Color = orig.Color end
-	end
-end
-
---------------------------------------------------------------------------------
--- 4. RENDER LOOP & RAINBOW ENGINE (TỐI ƯU FPS HIGH-PERFORMANCE)
---------------------------------------------------------------------------------
-local hue = 0
-local lastUpdate = tick()
-local frameCount = 0
-local fpsTimer = tick()
-
-RunService.RenderStepped:Connect(function(dt)
-	-- Tính FPS
-	frameCount = frameCount + 1
-	if tick() - fpsTimer >= 1 then
-		State.FPS = frameCount
-		frameCount = 0
-		fpsTimer = tick()
-
-		-- Tự động tối ưu nếu FPS tụt
-		if State.AutoOptimize and State.FPS < 30 and State.Quality ~= "TIẾT KIỆM FPS" then
-			State.Quality = "TIẾT KIỆM FPS"
-			print("[CẢNH BÁO MẠNG]: Đã tự động giảm hiệu ứng để duy trì FPS.")
-		end
-	end
-
-	if not State.MasterToggle then return end
-
-	-- Cập nhật Rainbow Hue
-	hue = (hue + dt * State.RainbowSpeed * 0.2) % 1
-	local rainbowColor = Color3.fromHSV(hue, 1, 1)
-
-	-- Tốc độ cập nhật màu giảm theo chất lượng đồ họa để tiết kiệm CPU
-	local now = tick()
-	local updateInterval = 0
-	if State.Quality == "CÂN BẰNG" then updateInterval = 0.05
-	elseif State.Quality == "TIẾT KIỆM FPS" then updateInterval = 0.1 end
-
-	if now - lastUpdate < updateInterval then return end
-	lastUpdate = now
-
-	-- Loop duy nhất quét toàn bộ Object đã Cache
-	for inst, data in pairs(ManagedObjects) do
-		if inst and inst.Parent then
-			local groupData = State.Groups[data.Group]
-			
-			if groupData and groupData.Active then
-				if groupData.Rainbow or (State.ApplyAllActive and State.ApplyAllColor == "Cầu vồng") then
-					SystemEngine.ApplyColorToInstance(inst, rainbowColor)
-				else
-					local selectedColorName = State.ApplyAllActive and State.ApplyAllColor or groupData.Color
-					local targetColor = COLOR_PALETTE[selectedColorName] or Color3.fromRGB(255,255,255)
-					
-					if selectedColorName == "Cầu vồng" then
-						SystemEngine.ApplyColorToInstance(inst, rainbowColor)
-					else
-						SystemEngine.ApplyColorToInstance(inst, targetColor)
-					end
-				end
-			end
-		end
-	end
-end)
-
---------------------------------------------------------------------------------
--- 5. LẮP ĐẶT NGUỒN DỮ LIỆU LẮNG NGHE (HOOKING CHARACTER & EFFECTS)
---------------------------------------------------------------------------------
-local function HookCharacter(char)
-	if not char then return end
-	
-	for _, desc in ipairs(char:GetDescendants()) do
-		SystemEngine.RegisterInstance(desc)
-	end
-
-	char.DescendantAdded:Connect(function(desc)
-		SystemEngine.RegisterInstance(desc)
-	end)
-end
-
-if LocalPlayer.Character then HookCharacter(LocalPlayer.Character) end
-LocalPlayer.CharacterAdded:Connect(HookCharacter)
-
--- Tự dọn dẹp bộ nhớ mỗi 10 giây
+-- Dọn dẹp Garbage Collector tự động khi Instance bị Destroy() trong game
 task.spawn(function()
-	while task.wait(10) do
-		SystemEngine.SweepDeadObjects()
-	end
+    while task.wait(5) do
+        for inst, _ in pairs(ManagedObjects) do
+            if not inst or not inst.Parent then
+                PerformanceEngine.UnregisterInstance(inst)
+            end
+        end
+    end
+end)
+
+-- Quét phân loại đối tượng chuyên sâu
+function PerformanceEngine.ClassifyAndRegister(inst, targetGroup)
+    if not inst or ManagedObjects[inst] then return end
+
+    if inst:IsA("ParticleEmitter") then
+        local name = inst.Name:lower()
+        if name:find("dust") or name:find("sand") or name:find("particle") or name:find("bui") then
+            PerformanceEngine.RegisterInstance(inst, "CÁT / BỤI / HẠT")
+        else
+            PerformanceEngine.RegisterInstance(inst, targetGroup)
+        end
+    elseif inst:IsA("Trail") or inst:IsA("Beam") then
+        PerformanceEngine.RegisterInstance(inst, targetGroup)
+    elseif inst:IsA("Highlight") then
+        PerformanceEngine.RegisterInstance(inst, targetGroup)
+    elseif inst:IsA("Light") then
+        PerformanceEngine.RegisterInstance(inst, targetGroup)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- 3. MONITOR & KHẢ NĂNG NHẬN DIỆN HIỆU ỨNG THỜI GIAN THỰC (HOOKS)
+--------------------------------------------------------------------------------
+
+local DynamicScanner = {}
+
+function DynamicScanner.ScanCharacter(char, isLocal)
+    if not char then return end
+    local groupTarget = isLocal and "NHÂN VẬT" or "NGƯỜI CHƠI KHÁC"
+    
+    if not isLocal and not CONFIG.ShowOtherPlayers then return end
+
+    for _, v in ipairs(char:GetDescendants()) do
+        DynamicScanner.EvaluateDescendant(v, groupTarget)
+    end
+
+    char.DescendantAdded:Connect(function(v)
+        DynamicScanner.EvaluateDescendant(v, groupTarget)
+    end)
+end
+
+function DynamicScanner.EvaluateDescendant(inst, groupFallback)
+    local parentName = inst.Parent and inst.Parent.Name:lower() or ""
+    local name = inst.Name:lower()
+
+    if parentName:find("weapon") or parentName:find("sword") or parentName:find("gun") or inst:FindFirstAncestorOfClass("Tool") then
+        PerformanceEngine.ClassifyAndRegister(inst, "VŨ KHÍ")
+    elseif name:find("dash") or name:find("run") or name:find("step") or name:find("move") then
+        PerformanceEngine.ClassifyAndRegister(inst, "HIỆU ỨNG DI CHUYỂN")
+    elseif name:find("attack") or name:find("slash") or name:find("hit") or name:find("cut") then
+        PerformanceEngine.ClassifyAndRegister(inst, "HIỆU ỨNG TẤN CÔNG")
+    elseif name:find("skill") or name:find("fruit") or name:find("aura") or name:find("blast") or name:find("magic") then
+        PerformanceEngine.ClassifyAndRegister(inst, "HIỆU ỨNG KỸ NĂNG")
+    else
+        PerformanceEngine.ClassifyAndRegister(inst, groupFallback or "NHÂN VẬT")
+    end
+end
+
+-- Tự động Hook nhân vật khi hồi sinh
+if LocalPlayer.Character then
+    DynamicScanner.ScanCharacter(LocalPlayer.Character, true)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    DynamicScanner.ScanCharacter(char, true)
+end)
+
+-- Hook Workspace theo dõi kỹ năng / hiệu ứng mới xuất hiện
+workspace.ChildAdded:Connect(function(child)
+    if not CONFIG.Groups["HIỆU ỨNG KỸ NĂNG"].Active then return end
+    
+    -- Tối ưu tầm xa: Không xử lý hiệu ứng phát sinh cách quá 200 studs
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        if child:IsA("Model") or child:IsA("BasePart") then
+            local pos = child:IsA("BasePart") and child.Position or child:GetPivot().Position
+            if (pos - hrp.Position).Magnitude > 200 then
+                return -- Bỏ qua đối tượng ở quá xa
+            end
+        end
+    end
+
+    task.wait()
+    for _, inst in ipairs(child:GetDescendants()) do
+        DynamicScanner.EvaluateDescendant(inst, "HIỆU ỨNG KỸ NĂNG")
+    end
 end)
 
 --------------------------------------------------------------------------------
--- 6. TẠO GIAO DIỆN NGƯỜI DÙNG UI (MODERN, CLEAN, FULL TIẾNG VIỆT)
+-- 4. BỘ CẬP NHẬT CHU KỲ FRAME & CẦU VỒNG (BATCH RENDER ENGINE)
 --------------------------------------------------------------------------------
+
+local RenderBatch = {
+    Accumulator = 0,
+    Hue = 0
+}
+
+RunService.Heartbeat:Connect(function(dt)
+    -- Xử lý thông số FPS
+    FPSMetrics.CurrentFPS = math.floor(1 / dt)
+    table.insert(FPSMetrics.FrameHistory, FPSMetrics.CurrentFPS)
+    if #FPSMetrics.FrameHistory > 60 then
+        table.remove(FPSMetrics.FrameHistory, 1)
+    end
+    
+    local sum = 0
+    for _, v in ipairs(FPSMetrics.FrameHistory) do sum = sum + v end
+    FPSMetrics.AverageFPS = math.floor(sum / #FPSMetrics.FrameHistory)
+
+    -- Tự động hạ cấp hiệu ứng khi FPS chạm ngưỡng nguy hiểm
+    if CONFIG.AutoOptimize and (os.clock() - FPSMetrics.LastOptimized > 3) then
+        FPSMetrics.LastOptimized = os.clock()
+        if FPSMetrics.AverageFPS < 30 then
+            CONFIG.QualityLevel = "TIẾT KIỆM FPS"
+        elseif FPSMetrics.AverageFPS > 50 and CONFIG.QualityLevel == "TIẾT KIỆM FPS" then
+            CONFIG.QualityLevel = "CÂN BẰNG"
+        end
+    end
+
+    -- Giới hạn tần suất Cập Nhật Màu theo Cấu Hình Hiệu Năng để bảo đảm FPS
+    local targetInterval = 0.033 -- Mặc định ~30 FPS Render Rate
+    if CONFIG.QualityLevel == "CAO" then
+        targetInterval = 0.016 -- ~60 FPS
+    elseif CONFIG.QualityLevel == "CÂN BẰNG" then
+        targetInterval = 0.05 -- ~20 FPS
+    elseif CONFIG.QualityLevel == "TIẾT KIỆM FPS" then
+        targetInterval = 0.1 -- ~10 FPS
+    end
+
+    RenderBatch.Accumulator = RenderBatch.Accumulator + dt
+    if RenderBatch.Accumulator < targetInterval then return end
+    RenderBatch.Accumulator = 0
+
+    -- Tính toán Hue cho Cầu Vồng
+    RenderBatch.Hue = (RenderBatch.Hue + (dt * CONFIG.RainbowSpeed * 0.2)) % 1
+    local currentRainbowColor = Color3.fromHSV(RenderBatch.Hue, 1, 1)
+
+    -- Duyệt Batch duy nhất cho toàn bộ Object được lưu
+    for inst, data in pairs(ManagedObjects) do
+        if inst and inst.Parent then
+            local grp = data.Group
+            local grpConfig = CONFIG.Groups[grp]
+            
+            if grpConfig and grpConfig.Active then
+                local isGlobalRainbow = (CONFIG.RainbowMode ~= "OFF")
+                local isGroupRainbow = grpConfig.Rainbow
+                
+                if isGlobalRainbow or isGroupRainbow then
+                    PerformanceEngine.ApplyColorToObject(inst, currentRainbowColor)
+                else
+                    local chosenColorName = CONFIG.ApplyToAll and CONFIG.GlobalColor or grpConfig.Color
+                    if chosenColorName == "Cầu Vồng" then
+                        PerformanceEngine.ApplyColorToObject(inst, currentRainbowColor)
+                    else
+                        -- Tối ưu: Chỉ set màu nếu chưa gắn đúng
+                        PerformanceEngine.ApplyColorToObject(inst, COLOR_PALETTE[chosenColorName])
+                    end
+                end
+            end
+        else
+            PerformanceEngine.UnregisterInstance(inst)
+        end
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- 5. THIẾT KẾ GIAO DIỆN PHONG CÁCH HIỆN ĐẠI (ADVANCED MODERN UI SYSTEM)
+--------------------------------------------------------------------------------
+
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "BangTuyChinhMauSac_BloxFruits"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Nút mở Menu
-local OpenBtn = Instance.new("TextButton")
-OpenBtn.Size = UDim2.new(0, 120, 0, 40)
-OpenBtn.Position = UDim2.new(0, 15, 0.4, 0)
-OpenBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-OpenBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-OpenBtn.Text = "ĐỔI MÀU"
-OpenBtn.Font = Enum.Font.GothamBold
-OpenBtn.TextSize = 14
-OpenBtn.Parent = ScreenGui
+-- Đảm bảo không bị trùng lặp GUI khi re-run script
+pcall(function()
+    if CoreGui:FindFirstChild(ScreenGui.Name) then
+        CoreGui[ScreenGui.Name]:Destroy()
+    end
+end)
+ScreenGui.Parent = CoreGui
 
-local OpenCorner = Instance.new("UICorner", OpenBtn)
-OpenCorner.CornerRadius = UDim.new(0, 8)
-
--- Khung chính Menu
+-- BẢNG KHUNG CHÍNH (MAIN FRAME)
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 520, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -260, 0.5, -190)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 520, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -260, 0.5, -210)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 22, 28)
 MainFrame.BorderSizePixel = 0
-MainFrame.Active = true
-MainFrame.Draggable = true -- Hỗ trợ kéo thả chuột và cảm ứng PC/Mobile
-MainFrame.Visible = false
+MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
-local MainCorner = Instance.new("UICorner", MainFrame)
-MainCorner.CornerRadius = UDim.new(0, 10)
+local MainUICorner = Instance.new("UICorner")
+MainUICorner.CornerRadius = UDim.new(0, 10)
+MainUICorner.Parent = MainFrame
 
--- Thanh tiêu đề Header
-local Header = Instance.new("Frame")
-Header.Size = UDim2.new(1, 0, 0, 45)
-Header.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-Header.Parent = MainFrame
+local MainUIStroke = Instance.new("UIStroke")
+MainUIStroke.Color = Color3.fromRGB(45, 50, 65)
+MainUIStroke.Thickness = 2
+MainUIStroke.Parent = MainFrame
 
-local HeaderCorner = Instance.new("UICorner", Header)
-HeaderCorner.CornerRadius = UDim.new(0, 10)
+-- THANH TIÊU ĐỀ (HEADER BAR)
+local HeaderBar = Instance.new("Frame")
+HeaderBar.Name = "HeaderBar"
+HeaderBar.Size = UDim2.new(1, 0, 0, 45)
+HeaderBar.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+HeaderBar.BorderSizePixel = 0
+HeaderBar.Parent = MainFrame
 
-local TitleText = Instance.new("TextLabel")
-TitleText.Size = UDim2.new(0, 250, 1, 0)
-TitleText.Position = UDim2.new(0, 15, 0, 0)
-TitleText.Text = "BẢNG TÙY CHỈNH MÀU SẮC"
-TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleText.Font = Enum.Font.GothamBold
-TitleText.TextSize = 14
-TitleText.TextXAlignment = Enum.TextXAlignment.Left
-TitleText.BackgroundTransparency = 1
-TitleText.Parent = Header
+local HeaderTitle = Instance.new("TextLabel")
+HeaderTitle.Size = UDim2.new(0, 250, 1, 0)
+HeaderTitle.Position = UDim2.new(0, 15, 0, 0)
+HeaderTitle.Text = "BẢNG TÙY CHỈNH MÀU SẮC"
+HeaderTitle.Font = Enum.Font.GothamBold
+HeaderTitle.TextSize = 14
+HeaderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+HeaderTitle.BackgroundTransparency = 1
+HeaderTitle.Parent = HeaderBar
 
--- Tác quyền bắt buộc góc trên bên phải
-local AuthorText = Instance.new("TextLabel")
-AuthorText.Size = UDim2.new(0, 180, 0, 15)
-AuthorText.Position = UDim2.new(1, -290, 0, 5)
-AuthorText.Text = "@m.game.xin.cho.vu"
-AuthorText.TextColor3 = Color3.fromRGB(150, 150, 170)
-AuthorText.Font = Enum.Font.Gotham
-AuthorText.TextSize = 11
-AuthorText.TextXAlignment = Enum.TextXAlignment.Right
-AuthorText.BackgroundTransparency = 1
-AuthorText.Parent = Header
+-- BẮT BUỘC: HIỂN THỊ WATERMARK TÁC GIẢ BÊN GÓC PHẢI TRÊN
+local AuthorWatermark = Instance.new("TextLabel")
+AuthorWatermark.Name = "AuthorWatermark"
+AuthorWatermark.Size = UDim2.new(0, 150, 0, 18)
+AuthorWatermark.Position = UDim2.new(1, -260, 0, 13)
+AuthorWatermark.Text = "@m.game.xin.cho.vu"
+AuthorWatermark.Font = Enum.Font.GothamMedium
+AuthorWatermark.TextSize = 11
+AuthorWatermark.TextColor3 = Color3.fromRGB(0, 210, 255)
+AuthorWatermark.TextXAlignment = Enum.TextXAlignment.Right
+AuthorWatermark.BackgroundTransparency = 1
+AuthorWatermark.Parent = HeaderBar
 
--- Các nút thao tác cửa sổ (Đóng / Thu nhỏ)
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -35, 0, 7)
-CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-CloseBtn.Parent = Header
+-- CÁC NÚT ĐIỀU KHIỂN CỬA SỔ (WINDOW CONTROL BUTTONS)
+local ControlContainer = Instance.new("Frame")
+ControlContainer.Size = UDim2.new(0, 95, 1, 0)
+ControlContainer.Position = UDim2.new(1, -100, 0, 0)
+ControlContainer.BackgroundTransparency = 1
+ControlContainer.Parent = HeaderBar
 
-local MinimizeBtn = Instance.new("TextButton")
-MinimizeBtn.Size = UDim2.new(0, 30, 0, 30)
-MinimizeBtn.Position = UDim2.new(1, -70, 0, 7)
-MinimizeBtn.Text = "-"
-MinimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinimizeBtn.Font = Enum.Font.GothamBold
-MinimizeBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-MinimizeBtn.Parent = Header
+local UIListLayoutControls = Instance.new("UIListLayout")
+UIListLayoutControls.FillDirection = Enum.FillDirection.Horizontal
+UIListLayoutControls.HorizontalAlignment = Enum.HorizontalAlignment.Right
+UIListLayoutControls.VerticalAlignment = Enum.VerticalAlignment.Center
+UIListLayoutControls.Padding = UDim.new(0, 5)
+UIListLayoutControls.Parent = ControlContainer
 
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
-Instance.new("UICorner", MinimizeBtn).CornerRadius = UDim.new(0, 6)
-
--- Khung Nội Dung Cuộn (ScrollingFrame)
-local ContentScroll = Instance.new("ScrollingFrame")
-ContentScroll.Size = UDim2.new(1, -20, 1, -55)
-ContentScroll.Position = UDim2.new(0, 10, 0, 50)
-ContentScroll.BackgroundTransparency = 1
-ContentScroll.ScrollBarThickness = 5
-ContentScroll.CanvasSize = UDim2.new(0, 0, 0, 950)
-ContentScroll.Parent = MainFrame
-
-local UIList = Instance.new("UIListLayout")
-UIList.SortOrder = Enum.SortOrder.LayoutOrder
-UIList.Padding = UDim.new(0, 10)
-UIList.Parent = ContentScroll
-
---------------------------------------------------------------------------------
--- 7. RENDER DANH MỤC & COMPONENT GIAO DIỆN
---------------------------------------------------------------------------------
-local function CreateSectionTitle(title)
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1, 0, 0, 25)
-	label.Text = "[ " .. title .. " ]"
-	label.TextColor3 = Color3.fromRGB(0, 230, 230)
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 13
-	label.BackgroundTransparency = 1
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Parent = ContentScroll
-	return label
+local function CreateWinButton(text, color, onClick)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 24, 0, 24)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.AutoButtonColor = true
+    btn.Parent = ControlContainer
+    
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, 6)
+    c.Parent = btn
+    
+    btn.MouseButton1Click:Connect(onClick)
+    return btn
 end
-
--- 1. Mục Tổng Quan & Áp Dụng
-CreateSectionTitle("MÀU SẮC TỔNG THỂ")
-
-local MasterStatus = Instance.new("TextLabel")
-MasterStatus.Size = UDim2.new(1, 0, 0, 20)
-MasterStatus.Text = "MÀU HIỆN TẠI: [ " .. State.ApplyAllColor .. " ]"
-MasterStatus.TextColor3 = Color3.fromRGB(255, 215, 0)
-MasterStatus.Font = Enum.Font.GothamBold
-MasterStatus.TextSize = 12
-MasterStatus.BackgroundTransparency = 1
-MasterStatus.TextXAlignment = Enum.TextXAlignment.Left
-MasterStatus.Parent = ContentScroll
-
--- Tạo Grid Bảng Màu
-local ColorGrid = Instance.new("Frame")
-ColorGrid.Size = UDim2.new(1, 0, 0, 130)
-ColorGrid.BackgroundTransparency = 1
-ColorGrid.Parent = ContentScroll
-
-local UIGrid = Instance.new("UIGridLayout")
-UIGrid.CellSize = UDim2.new(0, 90, 0, 32)
-UIGrid.CellPadding = UDim2.new(0, 8, 0, 8)
-UIGrid.Parent = ColorGrid
-
-for colorName, col3 in pairs(COLOR_PALETTE) do
-	local cBtn = Instance.new("TextButton")
-	cBtn.Text = colorName
-	cBtn.Font = Enum.Font.Gotham
-	cBtn.TextSize = 11
-	cBtn.TextColor3 = (colorName == "Trắng" or colorName == "Vàng") and Color3.fromRGB(0,0,0) or Color3.fromRGB(255,255,255)
-	cBtn.BackgroundColor3 = col3
-	cBtn.Parent = ColorGrid
-	Instance.new("UICorner", cBtn).CornerRadius = UDim.new(0, 6)
-
-	cBtn.MouseButton1Click:Connect(function()
-		State.ApplyAllColor = colorName
-		MasterStatus.Text = "MÀU HIỆN TẠI: [ " .. colorName .. " ]"
-	end)
-end
-
--- 2. Tùy chỉnh Nhóm Danh Mục
-CreateSectionTitle("DANH MỤC HIỆU ỨNG TÙY CHỈNH")
-
-for gName, gData in pairs(State.Groups) do
-	local gFrame = Instance.new("Frame")
-	gFrame.Size = UDim2.new(1, -10, 0, 40)
-	gFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-	gFrame.Parent = ContentScroll
-	Instance.new("UICorner", gFrame).CornerRadius = UDim.new(0, 6)
-
-	local gTitle = Instance.new("TextLabel")
-	gTitle.Size = UDim2.new(0, 200, 1, 0)
-	gTitle.Position = UDim2.new(0, 10, 0, 0)
-	gTitle.Text = gName
-	gTitle.TextColor3 = Color3.fromRGB(220, 220, 220)
-	gTitle.Font = Enum.Font.GothamBold
-	gTitle.TextSize = 12
-	gTitle.TextXAlignment = Enum.TextXAlignment.Left
-	gTitle.BackgroundTransparency = 1
-	gTitle.Parent = gFrame
-
-	local toggleBtn = Instance.new("TextButton")
-	toggleBtn.Size = UDim2.new(0, 80, 0, 26)
-	toggleBtn.Position = UDim2.new(1, -90, 0, 7)
-	toggleBtn.Text = gData.Active and "ĐANG BẬT" or "ĐANG TẮT"
-	toggleBtn.BackgroundColor3 = gData.Active and Color3.fromRGB(40, 160, 80) or Color3.fromRGB(160, 40, 40)
-	toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	toggleBtn.Font = Enum.Font.GothamBold
-	toggleBtn.TextSize = 10
-	toggleBtn.Parent = gFrame
-	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 4)
-
-	toggleBtn.MouseButton1Click:Connect(function()
-		gData.Active = not gData.Active
-		toggleBtn.Text = gData.Active and "ĐANG BẬT" or "ĐANG TẮT"
-		toggleBtn.BackgroundColor3 = gData.Active and Color3.fromRGB(40, 160, 80) or Color3.fromRGB(160, 40, 40)
-	end)
-end
-
--- 3. Mục Hiệu Suất & Tối Ưu
-CreateSectionTitle("HIỆU SUẤT & TỐI ƯU")
-
-local StatsLabel = Instance.new("TextLabel")
-StatsLabel.Size = UDim2.new(1, 0, 0, 50)
-StatsLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
-StatsLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
-StatsLabel.Font = Enum.Font.Code
-StatsLabel.TextSize = 11
-StatsLabel.Text = "Đang tải thông số hiệu suất..."
-StatsLabel.Parent = ContentScroll
-Instance.new("UICorner", StatsLabel).CornerRadius = UDim.new(0, 6)
-
--- 4. Mục Khôi Phục Mặc Định
-CreateSectionTitle("KHÔI PHỤC MẶC ĐỊNH")
-
-local ResetBtn = Instance.new("TextButton")
-ResetBtn.Size = UDim2.new(1, -10, 0, 35)
-ResetBtn.Text = "KHÔI PHỤC TOÀN BỘ MÀU BAN ĐẦU"
-ResetBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-ResetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ResetBtn.Font = Enum.Font.GothamBold
-ResetBtn.TextSize = 12
-ResetBtn.Parent = ContentScroll
-Instance.new("UICorner", ResetBtn).CornerRadius = UDim.new(0, 6)
-
-ResetBtn.MouseButton1Click:Connect(function()
-	for inst, _ in pairs(ManagedObjects) do
-		SystemEngine.RestoreInstance(inst)
-	end
-	print("[THÔNG BÁO]: Đã khôi phục toàn bộ hiệu ứng về mặc định.")
-end)
-
---------------------------------------------------------------------------------
--- 8. TƯƠNG TÁC SỰ KIỆN NÚT VÀ ĐIỀU KHIỂN SỰ KIỆN LỚN
---------------------------------------------------------------------------------
-OpenBtn.MouseButton1Click:Connect(function()
-	MainFrame.Visible = not MainFrame.Visible
-end)
-
-CloseBtn.MouseButton1Click:Connect(function()
-	MainFrame.Visible = false
-end)
 
 local isMinimized = false
-MinimizeBtn.MouseButton1Click:Connect(function()
-	isMinimized = not isMinimized
-	if isMinimized then
-		ContentScroll.Visible = false
-		MainFrame.Size = UDim2.new(0, 520, 0, 45)
-		MinimizeBtn.Text = "+"
-	else
-		ContentScroll.Visible = true
-		MainFrame.Size = UDim2.new(0, 520, 0, 380)
-		MinimizeBtn.Text = "-"
-	end
+local defaultSize = UDim2.new(0, 520, 0, 420)
+
+local btnMinimize = CreateWinButton("-", Color3.fromRGB(200, 150, 30), function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        MainFrame:TweenSize(UDim2.new(0, 520, 0, 45), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.3, true)
+    else
+        MainFrame:TweenSize(defaultSize, Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.3, true)
+    end
 end)
 
--- Loop Cập Nhật Giao Diện Monitor 1 giây / lần
-task.spawn(function()
-	while task.wait(1) do
-		StatsLabel.Text = string.format(
-			"  FPS Hiện Tại: %d | Đối Tượng Xử Lý: %d\n  Chất Lượng: %s | Tự Động Tối Ưu: %s",
-			State.FPS,
-			State.ManagedObjectsCount,
-			State.Quality,
-			State.AutoOptimize and "BẬT" or "TẮT"
-		)
-	end
+local btnMaximize = CreateWinButton("□", Color3.fromRGB(50, 150, 220), function()
+    isMinimized = false
+    MainFrame:TweenSize(UDim2.new(0, 700, 0, 550), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.3, true)
 end)
+
+local btnResetSize = CreateWinButton("↺", Color3.fromRGB(100, 100, 120), function()
+    isMinimized = false
+    MainFrame:TweenSize(defaultSize, Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.3, true)
+end)
+
+local btnClose = CreateWinButton("X", Color3.fromRGB(220, 50, 50), function()
+    MainFrame.Visible = false
+end)
+
+-- NÚT MỞ MENU TỰ ĐỘNG KHI ĐÓNG (TOGGLE FLOATING BUTTON)
+local OpenFloatingBtn = Instance.new("TextButton")
+OpenFloatingBtn.Name = "OpenFloatingBtn"
+OpenFloatingBtn.Size = UDim2.new(0, 140, 0, 35)
+OpenFloatingBtn.Position = UDim2.new(0, 15, 0, 15)
+OpenFloatingBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+OpenFloatingBtn.Text = "MỞ MENU MÀU"
+OpenFloatingBtn.Font = Enum.Font.GothamBold
+OpenFloatingBtn.TextSize = 12
+OpenFloatingBtn.TextColor3 = Color3.fromRGB(0, 210, 255)
+OpenFloatingBtn.Parent = ScreenGui
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(0, 8)
+OpenCorner.Parent = OpenFloatingBtn
+
+local OpenStroke = Instance.new("UIStroke")
+OpenStroke.Color = Color3.fromRGB(0, 210, 255)
+OpenStroke.Thickness = 1
+OpenStroke.Parent = OpenFloatingBtn
+
+OpenFloatingBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = true
+end)
+
+--------------------------------------------------------------------------------
+-- 6. HỆ THỐNG KÉO THẢ MENU DÙNG CHO CẢ TOUCH (MOBILE) & MOUSE (PC)
+--------------------------------------------------------------------------------
+
+local Dragging, DragInput, DragStart, StartPos
+
+HeaderBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        Dragging = true
+        DragStart = input.Position
+        StartPos = MainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                Dragging = false
+            end
+        end)
+    end
+end)
+
+HeaderBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        DragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == DragInput and Dragging then
+        local delta = input.Position - DragStart
+        MainFrame.Position = UDim2.new(
+            StartPos.X.Scale, StartPos.X.Offset + delta.X,
+            StartPos.Y.Scale, StartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- 7. DANH MỤC TRÊN MENU & CONTENT SCROLLING SYSTEM
+--------------------------------------------------------------------------------
+
+local SideNav = Instance.new("Frame")
+SideNav.Size = UDim2.new(0, 150, 1, -45)
+SideNav.Position = UDim2.new(0, 0, 0, 45)
+SideNav.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
+SideNav.BorderSizePixel = 0
+SideNav.Parent = MainFrame
+
+local NavScroll = Instance.new("ScrollingFrame")
+NavScroll.Size = UDim2.new(1, 0, 1, 0)
+NavScroll.BackgroundTransparency = 1
+NavScroll.ScrollBarThickness = 3
+NavScroll.Parent = SideNav
+
+local NavLayout = Instance.new("UIListLayout")
+NavLayout.SortOrder = Enum.SortOrder.LayoutOrder
+NavLayout.Padding = UDim.new(0, 2)
+NavLayout.Parent = NavScroll
+
+local ContentArea = Instance.new("Frame")
+ContentArea.Size = UDim2.new(1, -150, 1, -45)
+ContentArea.Position = UDim2.new(0, 150, 0, 45)
+ContentArea.BackgroundTransparency = 1
+ContentArea.Parent = MainFrame
+
+local CategoryPages = {}
+local CurrentPage = nil
+
+local CATEGORY_LIST = {
+    "[ MÀU SẮC ]",
+    "[ NHÂN VẬT ]",
+    "[ CÁT / BỤI / HẠT ]",
+    "[ HIỆU ỨNG KỸ NĂNG ]",
+    "[ HIỆU ỨNG DI CHUYỂN ]",
+    "[ HIỆU ỨNG TẤN CÔNG ]",
+    "[ VŨ KHÍ ]",
+    "[ NGƯỜI CHƠI KHÁC ]",
+    "[ CẦU VỒNG ]",
+    "[ HIỆU SUẤT ]",
+    "[ CÀI ĐẶT ]",
+    "[ KHÔI PHỤC ]"
+}
+
+local function SwitchPage(catName)
+    for name, page in pairs(CategoryPages) do
+        page.Visible = (name == catName)
+    end
+    CurrentPage = catName
+end
+
+for idx, catName in ipairs(CATEGORY_LIST) do
+    local navBtn = Instance.new("TextButton")
+    navBtn.Size = UDim2.new(1, 0, 0, 32)
+    navBtn.BackgroundColor3 = Color3.fromRGB(24, 26, 34)
+    navBtn.Text = catName
+    navBtn.Font = Enum.Font.GothamMedium
+    navBtn.TextSize = 10
+    navBtn.TextColor3 = Color3.fromRGB(180, 185, 200)
+    navBtn.BorderSizePixel = 0
+    navBtn.Parent = NavScroll
+
+    navBtn.MouseButton1Click:Connect(function()
+        SwitchPage(catName)
+    end)
+
+    -- Tạo Trang Tương Ứng
+    local pageScroll = Instance.new("ScrollingFrame")
+    pageScroll.Size = UDim2.new(1, -20, 1, -20)
+    pageScroll.Position = UDim2.new(0, 10, 0, 10)
+    pageScroll.BackgroundTransparency = 1
+    pageScroll.ScrollBarThickness = 4
+    pageScroll.Visible = false
+    pageScroll.Parent = ContentArea
+    
+    local pageLayout = Instance.new("UIListLayout")
+    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    pageLayout.Padding = UDim.new(0, 10)
+    pageLayout.Parent = pageScroll
+
+    CategoryPages[catName] = pageScroll
+end
+
+-- Hiển thị mặc định trang đầu tiên
+SwitchPage("[ MÀU SẮC ]")
+
+--------------------------------------------------------------------------------
+-- 8. TẠO CHI TIẾT NỘI DUNG TỪNG DANH MỤC
+--------------------------------------------------------------------------------
+
+-- Hàm Helper Tạo Section Toggle Switch
+local function CreateToggleOption(parent, labelText, defaultState, callback)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -10, 0, 35)
+    frame.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+    frame.Parent = parent
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(0.7, 0, 1, 0)
+    txt.Position = UDim2.new(0, 10, 0, 0)
+    txt.Text = labelText
+    txt.Font = Enum.Font.GothamMedium
+    txt.TextSize = 11
+    txt.TextColor3 = Color3.fromRGB(230, 230, 230)
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.BackgroundTransparency = 1
+    txt.Parent = frame
+
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 50, 0, 22)
+    toggleBtn.Position = UDim2.new(1, -60, 0.5, -11)
+    toggleBtn.BackgroundColor3 = defaultState and Color3.fromRGB(50, 200, 100) or Color3.fromRGB(80, 85, 100)
+    toggleBtn.Text = defaultState and "BẬT" or "TẮT"
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.TextSize = 10
+    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleBtn.Parent = frame
+
+    local tCorner = Instance.new("UICorner")
+    tCorner.CornerRadius = UDim.new(0, 11)
+    tCorner.Parent = toggleBtn
+
+    local state = defaultState
+    toggleBtn.MouseButton1Click:Connect(function()
+        state = not state
+        toggleBtn.Text = state and "BẬT" or "TẮT"
+        toggleBtn.BackgroundColor3 = state and Color3.fromRGB(50, 200, 100) or Color3.fromRGB(80, 85, 100)
+        callback(state)
+    end)
+    return frame
+end
+
+-- === 8.1 TRANG [ MÀU SẮC ] ===
+local pageColor = CategoryPages["[ MÀU SẮC ]"]
+
+local CurrentColorDisplay = Instance.new("TextLabel")
+CurrentColorDisplay.Size = UDim2.new(1, -10, 0, 30)
+CurrentColorDisplay.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+CurrentColorDisplay.Text = "MÀU HIỆN TẠI: XANH DƯƠNG"
+CurrentColorDisplay.Font = Enum.Font.GothamBold
+CurrentColorDisplay.TextSize = 12
+CurrentColorDisplay.TextColor3 = Color3.fromRGB(0, 210, 255)
+CurrentColorDisplay.Parent = pageColor
+
+local cDisplayCorner = Instance.new("UICorner")
+cDisplayCorner.CornerRadius = UDim.new(0, 6)
+cDisplayCorner.Parent = CurrentColorDisplay
+
+CreateToggleOption(pageColor, "ÁP DỤNG MỘT MÀU CHO TẤT CẢ", CONFIG.ApplyToAll, function(st)
+    CONFIG.ApplyToAll = st
+end)
+
+-- Bảng lưới chọn màu sắc (Color Grid)
+local GridFrame = Instance.new("Frame")
+GridFrame.Size = UDim2.new(1, -10, 0, 220)
+GridFrame.BackgroundTransparency = 1
+GridFrame.Parent = pageColor
+
+local UIGrid = Instance.new("UIGridLayout")
+UIGrid.CellSize = UDim2.new(0, 60, 0, 50)
+UIGrid.CellPadding = UDim2.new(0, 8, 0, 8)
+UIGrid.Parent = GridFrame
+
+for cName, cVal in pairs(COLOR_PALETTE) do
+    local cBtn = Instance.new("TextButton")
+    cBtn.Text = cName
+    cBtn.Font = Enum.Font.GothamBold
+    cBtn.TextSize = 9
+    cBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    cBtn.Parent = GridFrame
+    
+    if cVal == "RAINBOW" then
+        cBtn.BackgroundColor3 = Color3.fromRGB(150, 50, 200)
+    else
+        cBtn.BackgroundColor3 = cVal
+    end
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = cBtn
+
+    cBtn.MouseButton1Click:Connect(function()
+        CONFIG.GlobalColor = cName
+        CurrentColorDisplay.Text = "MÀU HIỆN TẠI: " .. cName:upper()
+    end)
+end
+
+-- === 8.2 CÁC TRANG NHÓM RIÊNG (NHÂN VẬT, CÁT BỤI, KỸ NĂNG...) ===
+local GROUP_MAPPING = {
+    ["[ NHÂN VẬT ]"]          = "NHÂN VẬT",
+    ["[ CÁT / BỤI / HẠT ]"]   = "CÁT / BỤI / HẠT",
+    ["[ HIỆU ỨNG KỸ NĂNG ]"]  = "HIỆU ỨNG KỸ NĂNG",
+    ["[ HIỆU ỨNG DI CHUYỂN ]"] = "HIỆU ỨNG DI CHUYỂN",
+    ["[ HIỆU ỨNG TẤN CÔNG ]"]  = "HIỆU ỨNG TẤN CÔNG",
+    ["[ VŨ KHÍ ]"]           = "VŨ KHÍ",
+    ["[ NGƯỜI CHƠI KHÁC ]"]   = "NGƯỜI CHƠI KHÁC",
+}
+
+for pageTitle, groupKey in pairs(GROUP_MAPPING) do
+    local page = CategoryPages[pageTitle]
+    
+    CreateToggleOption(page, "BẬT CẤU HÌNH NHÓM NÀY", CONFIG.Groups[groupKey].Active, function(st)
+        CONFIG.Groups[groupKey].Active = st
+    end)
+
+    CreateToggleOption(page, "CHẾ ĐỘ CẦU VỒNG NHÓM", CONFIG.Groups[groupKey].Rainbow, function(st)
+        CONFIG.Groups[groupKey].Rainbow = st
+    end)
+
+    local applyGroupBtn = Instance.new("TextButton")
+    applyGroupBtn.Size = UDim2.new(1, -10, 0, 30)
+    applyGroupBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
+    applyGroupBtn.Text = "ÁP DỤNG MÀU HIỆN TẠI CHO NHÓM NÀY"
+    applyGroupBtn.Font = Enum.Font.GothamBold
+    applyGroupBtn.TextSize = 10
+    applyGroupBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    applyGroupBtn.Parent = page
+
+    local btnC = Instance.new("UICorner")
+    btnC.CornerRadius = UDim.new(0, 6)
+    btnC.Parent = applyGroupBtn
+
+    applyGroupBtn.MouseButton1Click:Connect(function()
+        CONFIG.Groups[groupKey].Color = CONFIG.GlobalColor
+    end)
+end
+
+-- === 8.3 TRANG [ CẦU VỒNG ] ===
+local pageRainbow = CategoryPages["[ CẦU VỒNG ]"]
+
+CreateToggleOption(pageRainbow, "BẬT CẦU VỒNG TOÀN CỤC", CONFIG.RainbowMode ~= "OFF", function(st)
+    CONFIG.RainbowMode = st and "MEDIUM" or "OFF"
+end)
+
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(1, -10, 0, 25)
+speedLabel.Text = "TỐC ĐỘ CHUYỂN MÀU: " .. tostring(CONFIG.RainbowSpeed)
+speedLabel.Font = Enum.Font.GothamMedium
+speedLabel.TextSize = 11
+speedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Parent = pageRainbow
+
+local speedAddBtn = Instance.new("TextButton")
+speedAddBtn.Size = UDim2.new(1, -10, 0, 30)
+speedAddBtn.BackgroundColor3 = Color3.fromRGB(45, 50, 65)
+speedAddBtn.Text = "TĂNG TỐC ĐỘ CHUYỂN MÀU"
+speedAddBtn.Font = Enum.Font.GothamBold
+speedAddBtn.TextSize = 10
+speedAddBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedAddBtn.Parent = pageRainbow
+
+local speedC = Instance.new("UICorner")
+speedC.CornerRadius = UDim.new(0, 6)
+speedC.Parent = speedAddBtn
+
+speedAddBtn.MouseButton1Click:Connect(function()
+    CONFIG.RainbowSpeed = (CONFIG.RainbowSpeed % 5) + 1
+    speedLabel.Text = "TỐC ĐỘ CHUYỂN MÀU: " .. tostring(CONFIG.RainbowSpeed)
+end)
+
+-- === 8.4 TRANG [ HIỆU SUẤT ] ===
+local pagePerf = CategoryPages["[ HIỆU SUẤT ]"]
+
+local PerfInfoLabel = Instance.new("TextLabel")
+PerfInfoLabel.Size = UDim2.new(1, -10, 0, 100)
+PerfInfoLabel.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+PerfInfoLabel.Font = Enum.Font.GothamMedium
+PerfInfoLabel.TextSize = 11
+PerfInfoLabel.TextColor3 = Color3.fromRGB(0, 255, 150)
+PerfInfoLabel.TextYAlignment = Enum.TextYAlignment.Top
+PerfInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+PerfInfoLabel.Parent = pagePerf
+
+local perfC = Instance.new("UICorner")
+perfC.CornerRadius = UDim.new(0, 6)
+perfC.Parent = PerfInfoLabel
+
+task.spawn(function()
+    while task.wait(0.5) do
+        PerfInfoLabel.Text = string.format(
+            "  [ THÔNG TIN HIỆU SUẤT SYSTEM ]\n\n" ..
+            "  • FPS Hiện tại: %d\n" ..
+            "  • FPS Trung bình: %d\n" ..
+            "  • Đối tượng đang đổi màu: %d\n" ..
+            "  • Mức chất lượng: %s\n" ..
+            "  • Tự động tối ưu: %s",
+            FPSMetrics.CurrentFPS,
+            FPSMetrics.AverageFPS,
+            ManagedCount,
+            CONFIG.QualityLevel,
+            CONFIG.AutoOptimize and "BẬT" or "TẮT"
+        )
+    end
+end)
+
+CreateToggleOption(pagePerf, "TỰ ĐỘNG TỐI ƯU FPS", CONFIG.AutoOptimize, function(st)
+    CONFIG.AutoOptimize = st
+end)
+
+-- === 8.5 TRANG [ KHÔI PHỤC ] ===
+local pageReset = CategoryPages["[ KHÔI PHỤC ]"]
+
+local btnResetAll = Instance.new("TextButton")
+btnResetAll.Size = UDim2.new(1, -10, 0, 40)
+btnResetAll.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+btnResetAll.Text = "KHÔI PHỤC TOÀN BỘ MẶC ĐỊNH"
+btnResetAll.Font = Enum.Font.GothamBold
+btnResetAll.TextSize = 11
+btnResetAll.TextColor3 = Color3.fromRGB(255, 255, 255)
+btnResetAll.Parent = pageReset
+
+local resetC = Instance.new("UICorner")
+resetC.CornerRadius = UDim.new(0, 6)
+resetC.Parent = btnResetAll
+
+btnResetAll.MouseButton1Click:Connect(function()
+    for inst, data in pairs(ManagedObjects) do
+        pcall(function()
+            if inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam") then
+                inst.Color = data.OriginalColor
+            elseif inst:IsA("Highlight") then
+                inst.FillColor = data.OriginalColor
+            elseif inst:IsA("Light") or inst:IsA("BasePart") then
+                inst.Color = data.OriginalColor
+            end
+        end)
+    end
+    ManagedObjects = {}
+    ManagedCount = 0
+end)
+
+--------------------------------------------------------------------------------
+-- 9. THÔNG BÁO TỐI ƯU HOÀN TẤT
+--------------------------------------------------------------------------------
+
+print("==========================================================")
+print("[ HỆ THỐNG CUSTOM COLOR BLOX FRUITS KHỞI CHẠY THÀNH CÔNG ]")
+print("Bản quyền UI: @m.game.xin.cho.vu")
+print("==========================================================")
