@@ -1,29 +1,27 @@
 --============================================================
 -- COLOR SWAP v4.0
--- ĐỔI MÀU SÂU 100%
+-- TÍM 100% - KHÔNG MENU
 -- CLIENT ONLY
 --
--- Không đổi:
--- Character body
--- Vũ khí
--- Sát thương
--- Hitbox
--- Người chơi khác
+-- Không tạo GUI
+-- Không tạo Part mới
+-- Không đổi màu nhân vật
+-- Không đổi màu vũ khí
+-- Không thay đổi người chơi khác
 --
--- Có thể đổi:
--- ParticleEmitter
--- Trail
--- Beam
--- Light
--- Highlight
+-- Mục tiêu:
+-- Đỏ -> Tím
+-- Cam -> Tím
+-- Vàng -> Tím
+-- Xanh -> Tím
+-- Trắng -> Tím
+-- Mọi màu của hiệu ứng -> Tím
 --============================================================
 
+local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local LocalPlayer = Players.LocalPlayer
 
 --============================================================
 -- CẤU HÌNH
@@ -31,153 +29,72 @@ local PlayerGui = Player:WaitForChild("PlayerGui")
 
 local CONFIG = {
 
-	MenuKey = Enum.KeyCode.M,
+	-- Tím trứng / tím cà
+	PURPLE = Color3.fromRGB(
+		145,
+		55,
+		210
+	),
 
-	UpdateRate = 0.08,
+	-- Tím sáng hơn cho ánh sáng
+	LIGHT_PURPLE = Color3.fromRGB(
+		175,
+		75,
+		255
+	),
 
-	ScanRate = 0.8,
+	-- Khoảng cách xử lý
+	MAX_DISTANCE = 250,
 
-	MaxEffects = 300,
+	-- Quét hiệu ứng mới
+	SCAN_INTERVAL = 0.5,
 
-	CullingDistance = 180,
+	-- Không xử lý nhân vật
+	IGNORE_CHARACTER = true,
 
-	-- true = toàn bộ keypoint thành màu đã chọn
-	-- false = giữ độ sáng của màu gốc nhưng thay hue
-	ForceSolidColor = true,
-
-	-- true = xử lý cả hiệu ứng không có từ khóa
-	DeepScan = true,
+	-- Không xử lý Tool / vũ khí
+	IGNORE_TOOLS = true,
 }
 
 --============================================================
--- BẢNG MÀU
+-- BỘ NHỚ ĐỐI TƯỢNG
 --============================================================
 
-local COLORS = {
-
-	{
-		Name = "Đỏ",
-		Value = Color3.fromRGB(255, 40, 40)
-	},
-
-	{
-		Name = "Hồng",
-		Value = Color3.fromRGB(255, 70, 170)
-	},
-
-	{
-		Name = "Cam",
-		Value = Color3.fromRGB(255, 130, 30)
-	},
-
-	{
-		Name = "Vàng",
-		Value = Color3.fromRGB(255, 220, 30)
-	},
-
-	{
-		Name = "Xanh lá",
-		Value = Color3.fromRGB(40, 230, 90)
-	},
-
-	{
-		Name = "Xanh lam",
-		Value = Color3.fromRGB(40, 190, 255)
-	},
-
-	{
-		Name = "Xanh dương",
-		Value = Color3.fromRGB(45, 90, 255)
-	},
-
-	{
-		Name = "Tím",
-		Value = Color3.fromRGB(145, 45, 255)
-	},
-
-	{
-		Name = "Tím đậm",
-		Value = Color3.fromRGB(80, 15, 180)
-	},
-
-	{
-		Name = "Trắng",
-		Value = Color3.fromRGB(255, 255, 255)
-	},
-
-	{
-		Name = "Đen",
-		Value = Color3.fromRGB(20, 20, 25)
-	},
-
-	{
-		Name = "Vàng kim",
-		Value = Color3.fromRGB(255, 190, 45)
-	},
-
-	{
-		Name = "Bạc",
-		Value = Color3.fromRGB(190, 205, 220)
-	},
-
-	{
-		Name = "Cầu vồng",
-		Rainbow = true
-	},
-}
-
-local CurrentColor = COLORS[8]
-
-local RainbowHue = 0
+local tracked = {}
 
 --============================================================
--- CACHE
+-- KIỂM TRA CÓ PHẢI NHÂN VẬT / VŨ KHÍ KHÔNG
 --============================================================
 
-local Effects = {}
+local function isIgnored(object)
 
-local OriginalColors = {}
-
---============================================================
--- KIỂM TRA ĐỐI TƯỢNG
---============================================================
-
-local function IsSupported(object)
-
-	return object:IsA("ParticleEmitter")
-		or object:IsA("Trail")
-		or object:IsA("Beam")
-		or object:IsA("PointLight")
-		or object:IsA("SpotLight")
-		or object:IsA("SurfaceLight")
-		or object:IsA("Highlight")
-end
-
---============================================================
--- KHÔNG ĐỤNG VŨ KHÍ / CHARACTER
---============================================================
-
-local function IsForbidden(object)
+	if not object then
+		return true
+	end
 
 	local current = object
 
-	while current and current ~= workspace do
+	while current and current ~= Workspace do
 
-		local name = string.lower(current.Name)
+		-- Không đổi nhân vật
+		if CONFIG.IGNORE_CHARACTER then
 
-		-- Không xử lý thân nhân vật
-		if current == Player.Character then
-			return true
+			for _, player in ipairs(
+				Players:GetPlayers()
+			) do
+
+				if current == player.Character then
+					return true
+				end
+			end
 		end
 
-		-- Không xử lý vũ khí
-		if string.find(name, "weapon", 1, true)
-			or string.find(name, "sword", 1, true)
-			or string.find(name, "gun", 1, true)
-			or string.find(name, "katana", 1, true)
-			or string.find(name, "blade", 1, true) then
+		-- Không đổi Tool
+		if CONFIG.IGNORE_TOOLS then
 
-			return true
+			if current:IsA("Tool") then
+				return true
+			end
 		end
 
 		current = current.Parent
@@ -187,200 +104,219 @@ local function IsForbidden(object)
 end
 
 --============================================================
--- ĐĂNG KÝ
+-- KIỂM TRA HIỆU ỨNG
 --============================================================
 
-local function Register(object)
+local function isColorEffect(object)
 
-	if not IsSupported(object) then
-		return
+	if not object then
+		return false
 	end
 
-	if IsForbidden(object) then
-		return
+	if isIgnored(object) then
+		return false
 	end
 
-	if Effects[object] then
-		return
-	end
-
-	local count = 0
-
-	for _ in pairs(Effects) do
-		count += 1
-
-		if count >= CONFIG.MaxEffects then
-			return
-		end
-	end
-
-	Effects[object] = true
-
-	-- Lưu màu gốc
-	if object:IsA("ParticleEmitter")
+	return (
+		object:IsA("ParticleEmitter")
 		or object:IsA("Trail")
-		or object:IsA("Beam") then
-
-		OriginalColors[object] = object.Color
-
-	elseif object:IsA("PointLight")
+		or object:IsA("Beam")
+		or object:IsA("PointLight")
 		or object:IsA("SpotLight")
-		or object:IsA("SurfaceLight") then
-
-		OriginalColors[object] = object.Color
-
-	elseif object:IsA("Highlight") then
-
-		OriginalColors[object] = {
-			FillColor = object.FillColor,
-			OutlineColor = object.OutlineColor,
-		}
-	end
-end
-
---============================================================
--- QUÉT SÂU
---============================================================
-
-local function DeepScan()
-
-	local amount = 0
-
-	for _, object in ipairs(workspace:GetDescendants()) do
-
-		if amount >= CONFIG.MaxEffects then
-			break
-		end
-
-		if IsSupported(object)
-			and not IsForbidden(object) then
-
-			Register(object)
-
-			amount += 1
-		end
-	end
+		or object:IsA("SurfaceLight")
+		or object:IsA("Highlight")
+	)
 end
 
 --============================================================
 -- KIỂM TRA KHOẢNG CÁCH
 --============================================================
 
-local function IsNear(object)
+local function isNearPlayer(object)
 
-	local character = Player.Character
+	local character =
+		LocalPlayer.Character
 
 	if not character then
-		return false
+		return true
 	end
 
 	local root =
-		character:FindFirstChild("HumanoidRootPart")
+		character:FindFirstChild(
+			"HumanoidRootPart"
+		)
 
 	if not root then
-		return false
+		return true
 	end
 
 	local parent = object.Parent
 
+	-- Nếu hiệu ứng nằm trực tiếp trên Part
 	if parent and parent:IsA("BasePart") then
 
 		return (
-			parent.Position - root.Position
-		).Magnitude <= CONFIG.CullingDistance
+			parent.Position -
+			root.Position
+		).Magnitude <=
+			CONFIG.MAX_DISTANCE
+	end
 
+	-- Tìm Part gần nhất
+	local current = parent
+
+	while current and current ~= Workspace do
+
+		if current:IsA("BasePart") then
+
+			return (
+				current.Position -
+				root.Position
+			).Magnitude <=
+				CONFIG.MAX_DISTANCE
+		end
+
+		current = current.Parent
 	end
 
 	return true
 end
 
 --============================================================
--- TẠO MÀU CẦU VỒNG
+-- TẠO COLOR SEQUENCE TÍM 100%
+--
+-- Điểm quan trọng:
+-- Không chỉ đổi một màu.
+-- Toàn bộ các keypoint đều thành tím.
+--
+-- Ví dụ:
+-- Đỏ -> Cam -> Vàng
+-- trở thành:
+-- Tím -> Tím -> Tím
+--
+-- Nhưng vẫn giữ nguyên độ trong suốt của từng điểm.
 --============================================================
 
-local function GetRainbow()
+local function purpleSequence(oldSequence)
 
-	RainbowHue =
-		(RainbowHue + 0.012) % 1
-
-	return Color3.fromHSV(
-		RainbowHue,
-		1,
-		1
-	)
-end
-
---============================================================
--- ĐỔI MÀU SÂU COLORSEQUENCE
---============================================================
-
-local function ConvertSequence(sequence, targetColor)
-
-	-- ÉP TOÀN BỘ THÀNH MỘT MÀU
-	if CONFIG.ForceSolidColor then
-
-		local keypoints = {}
-
-		for _, keypoint in ipairs(
-			sequence.Keypoints
-		) do
-
-			table.insert(
-				keypoints,
-
-				ColorSequenceKeypoint.new(
-					keypoint.Time,
-					targetColor
-				)
-			)
-		end
-
-		return ColorSequence.new(keypoints)
+	if not oldSequence then
+		return ColorSequence.new(
+			CONFIG.PURPLE
+		)
 	end
 
-	--========================================================
-	-- CHẾ ĐỘ GIỮ ĐỘ SÁNG
-	--========================================================
-
-	local newKeypoints = {}
+	local keypoints = {}
 
 	for _, keypoint in ipairs(
-		sequence.Keypoints
+		oldSequence.Keypoints
 	) do
 
-		local oldColor =
-			keypoint.Value
-
-		local _, _, value =
-			oldColor:ToHSV()
-
-		local saturation = 0.95
-
-		local newColor =
-			Color3.fromHSV(
-				select(1, targetColor:ToHSV()),
-				saturation,
-				math.clamp(value, 0.35, 1)
-			)
-
 		table.insert(
-			newKeypoints,
-
+			keypoints,
 			ColorSequenceKeypoint.new(
 				keypoint.Time,
-				newColor
+				CONFIG.PURPLE
 			)
 		)
 	end
 
-	return ColorSequence.new(newKeypoints)
+	return ColorSequence.new(keypoints)
 end
 
 --============================================================
--- ÁP DỤNG MÀU 100%
+-- ĐỔI MÀU PARTICLE
 --============================================================
 
-local function ApplyDeepColor(object, color)
+local function changeParticle(object)
+
+	if not object:IsA("ParticleEmitter") then
+		return
+	end
+
+	-- Ép toàn bộ ColorSequence thành tím
+	object.Color =
+		purpleSequence(object.Color)
+
+	tracked[object] = true
+end
+
+--============================================================
+-- ĐỔI MÀU TRAIL
+--============================================================
+
+local function changeTrail(object)
+
+	if not object:IsA("Trail") then
+		return
+	end
+
+	object.Color =
+		purpleSequence(object.Color)
+
+	tracked[object] = true
+end
+
+--============================================================
+-- ĐỔI MÀU BEAM
+--============================================================
+
+local function changeBeam(object)
+
+	if not object:IsA("Beam") then
+		return
+	end
+
+	object.Color =
+		purpleSequence(object.Color)
+
+	tracked[object] = true
+end
+
+--============================================================
+-- ĐỔI MÀU LIGHT
+--============================================================
+
+local function changeLight(object)
+
+	if not (
+		object:IsA("PointLight")
+		or object:IsA("SpotLight")
+		or object:IsA("SurfaceLight")
+	) then
+
+		return
+	end
+
+	object.Color =
+		CONFIG.LIGHT_PURPLE
+
+	tracked[object] = true
+end
+
+--============================================================
+-- ĐỔI MÀU HIGHLIGHT
+--============================================================
+
+local function changeHighlight(object)
+
+	if not object:IsA("Highlight") then
+		return
+	end
+
+	object.FillColor =
+		CONFIG.PURPLE
+
+	object.OutlineColor =
+		CONFIG.LIGHT_PURPLE
+
+	tracked[object] = true
+end
+
+--============================================================
+-- HÀM ĐỔI MÀU CHÍNH
+--============================================================
+
+local function convertToPurple(object)
 
 	if not object
 		or not object.Parent then
@@ -388,757 +324,152 @@ local function ApplyDeepColor(object, color)
 		return
 	end
 
-	if not IsNear(object) then
+	if isIgnored(object) then
 		return
 	end
 
-	--========================================================
-	-- PARTICLE
-	--========================================================
+	if not isNearPlayer(object) then
+		return
+	end
 
 	if object:IsA("ParticleEmitter") then
 
-		object.Color =
-			ConvertSequence(
-				object.Color,
-				color
-			)
-
-	--========================================================
-	-- TRAIL
-	--========================================================
+		changeParticle(object)
 
 	elseif object:IsA("Trail") then
 
-		object.Color =
-			ConvertSequence(
-				object.Color,
-				color
-			)
-
-	--========================================================
-	-- BEAM
-	--========================================================
+		changeTrail(object)
 
 	elseif object:IsA("Beam") then
 
-		object.Color =
-			ConvertSequence(
-				object.Color,
-				color
-			)
-
-	--========================================================
-	-- LIGHT
-	--========================================================
+		changeBeam(object)
 
 	elseif object:IsA("PointLight")
 		or object:IsA("SpotLight")
 		or object:IsA("SurfaceLight") then
 
-		object.Color = color
-
-	--========================================================
-	-- HIGHLIGHT
-	--========================================================
+		changeLight(object)
 
 	elseif object:IsA("Highlight") then
 
-		object.FillColor = color
-		object.OutlineColor = color
+		changeHighlight(object)
 	end
 end
 
 --============================================================
--- KHÔI PHỤC MÀU GỐC
+-- QUÉT TOÀN BỘ HIỆU ỨNG
 --============================================================
 
-local function RestoreOriginal()
+local function scanWorkspace()
 
-	for object, original in pairs(
-		OriginalColors
+	local amount = 0
+
+	for _, object in ipairs(
+		Workspace:GetDescendants()
 	) do
 
-		if object
-			and object.Parent then
+		if amount >= 1000 then
+			break
+		end
 
-			if object:IsA("ParticleEmitter")
-				or object:IsA("Trail")
-				or object:IsA("Beam") then
+		if isColorEffect(object) then
 
-				object.Color = original
+			convertToPurple(object)
 
-			elseif object:IsA("PointLight")
-				or object:IsA("SpotLight")
-				or object:IsA("SurfaceLight") then
-
-				object.Color = original
-
-			elseif object:IsA("Highlight") then
-
-				object.FillColor =
-					original.FillColor
-
-				object.OutlineColor =
-					original.OutlineColor
-			end
+			amount += 1
 		end
 	end
 end
 
 --============================================================
--- CẬP NHẬT TOÀN BỘ
+-- HIỆU ỨNG MỚI XUẤT HIỆN
 --============================================================
 
-local function UpdateAll()
+Workspace.DescendantAdded:Connect(
+	function(object)
 
-	local color
+		if isColorEffect(object) then
 
-	if CurrentColor.Rainbow then
-		color = GetRainbow()
-	else
-		color = CurrentColor.Value
-	end
+			-- Chờ game hoàn thành việc thiết lập
+			-- ParticleEmitter / Beam / Trail
+			task.defer(function()
 
-	for object in pairs(Effects) do
+				convertToPurple(object)
 
-		if not object
-			or not object.Parent then
-
-			Effects[object] = nil
-
-		else
-
-			ApplyDeepColor(
-				object,
-				color
-			)
-		end
-	end
-end
-
---============================================================
--- THEO DÕI OBJECT MỚI
---============================================================
-
-workspace.DescendantAdded:Connect(function(object)
-
-	if IsSupported(object) then
-
-		task.defer(function()
-
-			if not IsForbidden(object) then
-				Register(object)
-			end
-
-		end)
-	end
-end)
-
---============================================================
--- GUI
---============================================================
-
-local GUI = Instance.new("ScreenGui")
-
-GUI.Name = "ColorSwap_v4"
-GUI.ResetOnSpawn = false
-GUI.IgnoreGuiInset = true
-GUI.DisplayOrder = 999
-
-GUI.Parent = PlayerGui
-
---============================================================
--- KHUNG CHÍNH
---============================================================
-
-local Main = Instance.new("Frame")
-
-Main.Size =
-	UDim2.fromOffset(440, 570)
-
-Main.Position =
-	UDim2.new(0.5, -220, 0.5, -285)
-
-Main.BackgroundColor3 =
-	Color3.fromRGB(17, 17, 23)
-
-Main.BorderSizePixel = 0
-
-Main.Visible = false
-
-Main.Parent = GUI
-
-local corner =
-	Instance.new("UICorner")
-
-corner.CornerRadius =
-	UDim.new(0, 15)
-
-corner.Parent = Main
-
-local stroke =
-	Instance.new("UIStroke")
-
-stroke.Color =
-	Color3.fromRGB(160, 60, 255)
-
-stroke.Thickness = 1.4
-stroke.Transparency = 0.3
-
-stroke.Parent = Main
-
---============================================================
--- TIÊU ĐỀ
---============================================================
-
-local Header =
-	Instance.new("Frame")
-
-Header.Size =
-	UDim2.new(1, 0, 0, 68)
-
-Header.BackgroundColor3 =
-	Color3.fromRGB(27, 27, 36)
-
-Header.BorderSizePixel = 0
-
-Header.Parent = Main
-
-local headerCorner =
-	Instance.new("UICorner")
-
-headerCorner.CornerRadius =
-	UDim.new(0, 15)
-
-headerCorner.Parent = Header
-
-local Title =
-	Instance.new("TextLabel")
-
-Title.BackgroundTransparency = 1
-
-Title.Position =
-	UDim2.fromOffset(16, 8)
-
-Title.Size =
-	UDim2.new(1, -32, 0, 27)
-
-Title.Font =
-	Enum.Font.GothamBold
-
-Title.Text =
-	"COLOR SWAP • ĐỔI MÀU SÂU"
-
-Title.TextColor3 =
-	Color3.fromRGB(245, 245, 250)
-
-Title.TextSize = 17
-
-Title.TextXAlignment =
-	Enum.TextXAlignment.Left
-
-Title.Parent = Header
-
-local SubTitle =
-	Instance.new("TextLabel")
-
-SubTitle.BackgroundTransparency = 1
-
-SubTitle.Position =
-	UDim2.fromOffset(17, 37)
-
-SubTitle.Size =
-	UDim2.new(1, -34, 0, 18)
-
-SubTitle.Font =
-	Enum.Font.Gotham
-
-SubTitle.Text =
-	"Chế độ 100% • Không giữ màu đỏ gốc"
-
-SubTitle.TextColor3 =
-	Color3.fromRGB(175, 175, 190)
-
-SubTitle.TextSize = 10
-
-SubTitle.TextXAlignment =
-	Enum.TextXAlignment.Left
-
-SubTitle.Parent = Header
-
---============================================================
--- NÚT ĐÓNG
---============================================================
-
-local Close =
-	Instance.new("TextButton")
-
-Close.Size =
-	UDim2.fromOffset(34, 30)
-
-Close.Position =
-	UDim2.new(1, -45, 0, 27)
-
-Close.BackgroundColor3 =
-	Color3.fromRGB(55, 35, 45)
-
-Close.BorderSizePixel = 0
-
-Close.Font =
-	Enum.Font.GothamBold
-
-Close.Text = "×"
-
-Close.TextColor3 =
-	Color3.fromRGB(255, 100, 130)
-
-Close.TextSize = 18
-
-Close.Parent = Header
-
-Instance.new("UICorner",
-	Close).CornerRadius =
-	UDim.new(0, 8)
-
-Close.Activated:Connect(function()
-
-	Main.Visible = false
-
-end)
-
---============================================================
--- MÀU ĐANG CHỌN
---============================================================
-
-local CurrentLabel =
-	Instance.new("TextLabel")
-
-CurrentLabel.Position =
-	UDim2.fromOffset(15, 80)
-
-CurrentLabel.Size =
-	UDim2.new(1, -30, 0, 42)
-
-CurrentLabel.BackgroundColor3 =
-	Color3.fromRGB(34, 34, 45)
-
-CurrentLabel.BorderSizePixel = 0
-
-CurrentLabel.Font =
-	Enum.Font.GothamBold
-
-CurrentLabel.Text =
-	"MÀU ĐANG CHỌN: Tím"
-
-CurrentLabel.TextColor3 =
-	Color3.fromRGB(235, 220, 255)
-
-CurrentLabel.TextSize = 12
-
-CurrentLabel.Parent = Main
-
-Instance.new("UICorner",
-	CurrentLabel).CornerRadius =
-	UDim.new(0, 9)
-
---============================================================
--- CHẾ ĐỘ 100%
---============================================================
-
-local DeepMode =
-	Instance.new("TextButton")
-
-DeepMode.Position =
-	UDim2.fromOffset(15, 130)
-
-DeepMode.Size =
-	UDim2.new(1, -30, 0, 40)
-
-DeepMode.BackgroundColor3 =
-	Color3.fromRGB(75, 40, 105)
-
-DeepMode.BorderSizePixel = 0
-
-DeepMode.Font =
-	Enum.Font.GothamBold
-
-DeepMode.Text =
-	"ĐỔI MÀU 100%: ĐANG BẬT"
-
-DeepMode.TextColor3 =
-	Color3.fromRGB(255, 255, 255)
-
-DeepMode.TextSize = 11
-
-DeepMode.Parent = Main
-
-Instance.new("UICorner",
-	DeepMode).CornerRadius =
-	UDim.new(0, 9)
-
-DeepMode.Activated:Connect(function()
-
-	CONFIG.ForceSolidColor =
-		not CONFIG.ForceSolidColor
-
-	if CONFIG.ForceSolidColor then
-
-		DeepMode.Text =
-			"ĐỔI MÀU 100%: ĐANG BẬT"
-
-		DeepMode.BackgroundColor3 =
-			Color3.fromRGB(75, 40, 105)
-
-	else
-
-		DeepMode.Text =
-			"ĐỔI MÀU 100%: ĐANG TẮT"
-
-		DeepMode.BackgroundColor3 =
-			Color3.fromRGB(40, 40, 48)
-	end
-
-	UpdateAll()
-end)
-
---============================================================
--- DANH SÁCH MÀU
---============================================================
-
-local Scroll =
-	Instance.new("ScrollingFrame")
-
-Scroll.Position =
-	UDim2.fromOffset(15, 180)
-
-Scroll.Size =
-	UDim2.new(1, -30, 1, -240)
-
-Scroll.BackgroundTransparency = 1
-
-Scroll.BorderSizePixel = 0
-
-Scroll.ScrollBarThickness = 5
-
-Scroll.ScrollBarImageColor3 =
-	Color3.fromRGB(160, 60, 255)
-
-Scroll.Parent = Main
-
-local Grid =
-	Instance.new("UIGridLayout")
-
-Grid.CellSize =
-	UDim2.new(0.5, -6, 0, 43)
-
-Grid.CellPadding =
-	UDim2.fromOffset(8, 8)
-
-Grid.SortOrder =
-	Enum.SortOrder.LayoutOrder
-
-Grid.Parent = Scroll
-
-Grid:GetPropertyChangedSignal(
-	"AbsoluteContentSize"
-):Connect(function()
-
-	Scroll.CanvasSize =
-		UDim2.fromOffset(
-			0,
-			Grid.AbsoluteContentSize.Y + 10
-		)
-
-end)
-
---============================================================
--- TẠO NÚT MÀU
---============================================================
-
-for index, data in ipairs(COLORS) do
-
-	local Button =
-		Instance.new("TextButton")
-
-	Button.BackgroundColor3 =
-		Color3.fromRGB(34, 34, 45)
-
-	Button.BorderSizePixel = 0
-
-	Button.AutoButtonColor = false
-
-	Button.Text = ""
-
-	Button.LayoutOrder = index
-
-	Button.Parent = Scroll
-
-	Instance.new("UICorner",
-		Button).CornerRadius =
-		UDim.new(0, 9)
-
-	local Preview =
-		Instance.new("Frame")
-
-	Preview.Size =
-		UDim2.fromOffset(25, 25)
-
-	Preview.Position =
-		UDim2.fromOffset(8, 9)
-
-	Preview.BorderSizePixel = 0
-
-	Preview.Parent = Button
-
-	Instance.new("UICorner",
-		Preview).CornerRadius =
-		UDim.new(1, 0)
-
-	if data.Rainbow then
-
-		local gradient =
-			Instance.new("UIGradient")
-
-		gradient.Color =
-			ColorSequence.new({
-
-				ColorSequenceKeypoint.new(
-					0,
-					Color3.fromRGB(255, 50, 50)
-				),
-
-				ColorSequenceKeypoint.new(
-					0.25,
-					Color3.fromRGB(255, 230, 40)
-				),
-
-				ColorSequenceKeypoint.new(
-					0.5,
-					Color3.fromRGB(50, 255, 100)
-				),
-
-				ColorSequenceKeypoint.new(
-					0.75,
-					Color3.fromRGB(50, 150, 255)
-				),
-
-				ColorSequenceKeypoint.new(
-					1,
-					Color3.fromRGB(190, 50, 255)
-				),
-			})
-
-		gradient.Parent = Preview
-
-	else
-
-		Preview.BackgroundColor3 =
-			data.Value
-	end
-
-	local Label =
-		Instance.new("TextLabel")
-
-	Label.BackgroundTransparency = 1
-
-	Label.Position =
-		UDim2.fromOffset(43, 0)
-
-	Label.Size =
-		UDim2.new(1, -48, 1, 0)
-
-	Label.Font =
-		Enum.Font.GothamMedium
-
-	Label.Text =
-		data.Name
-
-	Label.TextColor3 =
-		Color3.fromRGB(240, 240, 245)
-
-	Label.TextSize = 11
-
-	Label.TextXAlignment =
-		Enum.TextXAlignment.Left
-
-	Label.Parent = Button
-
-	Button.Activated:Connect(function()
-
-		CurrentColor = data
-
-		CurrentLabel.Text =
-			"MÀU ĐANG CHỌN: "
-			.. data.Name
-
-		UpdateAll()
-
-	end)
-end
-
---============================================================
--- NÚT MỞ MENU
---============================================================
-
-local OpenButton =
-	Instance.new("TextButton")
-
-OpenButton.Size =
-	UDim2.fromOffset(60, 60)
-
-OpenButton.Position =
-	UDim2.new(0, 18, 0.5, -30)
-
-OpenButton.BackgroundColor3 =
-	Color3.fromRGB(145, 45, 255)
-
-OpenButton.BorderSizePixel = 0
-
-OpenButton.Font =
-	Enum.Font.GothamBold
-
-OpenButton.Text =
-	"MÀU"
-
-OpenButton.TextColor3 =
-	Color3.new(1, 1, 1)
-
-OpenButton.TextSize = 11
-
-OpenButton.Parent = GUI
-
-Instance.new("UICorner",
-	OpenButton).CornerRadius =
-	UDim.new(1, 0)
-
-OpenButton.Activated:Connect(function()
-
-	Main.Visible = true
-
-end)
-
---============================================================
--- PHÍM M
---============================================================
-
-UserInputService.InputBegan:Connect(
-	function(input, processed)
-
-		if processed then
-			return
-		end
-
-		if input.KeyCode ==
-			CONFIG.MenuKey then
-
-			Main.Visible =
-				not Main.Visible
-
+			end)
 		end
 	end
 )
 
 --============================================================
--- KÉO MENU
+-- CHARACTER ADDED
 --============================================================
 
-local dragging = false
-local dragStart
-local startPosition
+LocalPlayer.CharacterAdded:Connect(
+	function()
 
-Header.InputBegan:Connect(function(input)
+		-- Không đổi nhân vật.
+		-- Chỉ quét lại Workspace sau khi hồi sinh
+		-- để bắt các effect bên ngoài nhân vật.
 
-	if input.UserInputType ==
-		Enum.UserInputType.MouseButton1
-		or input.UserInputType ==
-		Enum.UserInputType.Touch then
+		task.wait(0.5)
 
-		dragging = true
+		scanWorkspace()
+	end
+)
 
-		dragStart =
-			input.Position
+--============================================================
+-- QUÉT LIÊN TỤC
+--============================================================
 
-		startPosition =
-			Main.Position
+task.spawn(function()
 
-		input.Changed:Connect(function()
+	while true do
 
-			if input.UserInputState ==
-				Enum.UserInputState.End then
+		scanWorkspace()
 
-				dragging = false
+		task.wait(
+			CONFIG.SCAN_INTERVAL
+		)
+	end
+end)
+
+--============================================================
+-- KIỂM TRA ĐỐI TƯỢNG ĐÃ BỊ XÓA
+--============================================================
+
+task.spawn(function()
+
+	while true do
+
+		for object in pairs(tracked) do
+
+			if not object
+				or not object.Parent then
+
+				tracked[object] = nil
+			else
+
+				-- Ép lại màu.
+				--
+				-- Một số hệ thống hiệu ứng có thể
+				-- tự đặt màu lại sau khi tạo.
+				convertToPurple(object)
 			end
+		end
 
-		end)
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-
-	if not dragging then
-		return
-	end
-
-	if input.UserInputType ==
-		Enum.UserInputType.MouseMovement
-		or input.UserInputType ==
-		Enum.UserInputType.Touch then
-
-		local delta =
-			input.Position - dragStart
-
-		Main.Position =
-			UDim2.new(
-				startPosition.X.Scale,
-				startPosition.X.Offset + delta.X,
-
-				startPosition.Y.Scale,
-				startPosition.Y.Offset + delta.Y
-			)
+		task.wait(0.15)
 	end
 end)
 
 --============================================================
--- QUÉT ĐỊNH KỲ
+-- KHỞI ĐỘNG NGAY
 --============================================================
 
-task.spawn(function()
+task.wait(0.2)
 
-	while GUI.Parent do
-
-		DeepScan()
-
-		task.wait(CONFIG.ScanRate)
-
-	end
-end)
-
---============================================================
--- CẬP NHẬT MÀU
---============================================================
-
-task.spawn(function()
-
-	while GUI.Parent do
-
-		UpdateAll()
-
-		task.wait(CONFIG.UpdateRate)
-
-	end
-end)
-
---============================================================
--- KHỞI ĐỘNG
---============================================================
-
-task.wait(1)
-
-DeepScan()
-
-UpdateAll()
+scanWorkspace()
 
 print(
-	"[ColorSwap v4.0] Đổi màu sâu 100% đã bật."
+	"[ColorSwap v4.0] TẤT CẢ HIỆU ỨNG ĐÃ ĐƯỢC ÉP SANG TÍM."
 )
